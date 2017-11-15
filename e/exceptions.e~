@@ -1,0 +1,31 @@
+#ifndef EXCEPTIONS
+#define EXCEPTIONS
+
+/************************** EXCEPTIONS.E ******************************
+*
+*  The externals declaration file for the Exceptions Module
+*
+*/
+
+#include "../h/types.h"
+
+extern void copyState();
+extern void tlbManager();
+extern void pgmTrapHandler();
+extern void syscallHandler();
+
+extern int sysOne(state_t* caller);
+extern void sysTwo(pcb_t* head);
+extern void sysThree(state_t* caller);
+extern void sysFour(state_t* caller);
+extern int sysFive(state_t* caller);
+extern int sysSix();
+extern void sysSeven();
+extern void sysEight();
+
+extern void passUpOrDie(state_PTR caller, int reason);
+
+
+/********************************************************************/
+
+#endif

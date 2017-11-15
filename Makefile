@@ -1,0 +1,53 @@
+#$Id: Makefile,v 1.2 2004/05/01 14:53:48 morsiani Exp morsiani $
+# Makefile for mipsel-linux
+
+SUPDIR = /usr/include/uarm
+
+PROJECTDIR = /home/joseph/OpSys/JaeOs
+
+DEFS = $(PROJECTDIR)/h/const.h $(PROJECTDIR)/h/types.h $(PROJECTDIR)/e/pcb.e $(PROJECTDIR)/e/asl.e $(PROJECTDIR)/e/initial.e $(PROJECTDIR)/e/interrupts.e $(PROJECTDIR)/e/scheduler.e $(PROJECTDIR)/e/exceptions.e $(SUPDIR)/libuarm.h Makefile
+
+
+CFLAGS =  -mcpu=arm7tdmi -c
+LDCOREFLAGS =  -T $(SUPDIR)/ldscripts/elf32ltsarm.h.uarmcore.x
+
+CC = arm-none-eabi-gcc
+LD = arm-none-eabi-ld
+
+#main target
+all: kernel.core.uarm 
+
+kernel.core.uarm: initial.o interrupts.o scheduler.o exceptions.o asl.o pcb.o p2test.o
+	$(LD) $(LDCOREFLAGS) -o kernel.core.uarm p2test.o initial.o interrupts.o scheduler.o exceptions.o asl.o pcb.o $(SUPDIR)/libdiv.o $(SUPDIR)/crtso.o $(SUPDIR)/libuarm.o
+
+p2test.o: $(PROJECTDIR)/phase2/p2test.c $(DEFS)
+	$(CC) $(CFLAGS) $(PROJECTDIR)/phase2/p2test.c
+ 
+initial.o: $(PROJECTDIR)/phase2/initial.c $(DEFS)
+	$(CC) $(CFLAGS) $(PROJECTDIR)/phase2/initial.c
+
+interrupts.o: $(PROJECTDIR)/phase2/interrupts.c $(DEFS)
+	$(CC) $(CFLAGS) $(PROJECTDIR)/phase2/interrupts.c
+ 
+scheduler.o: $(PROJECTDIR)/phase2/scheduler.c $(DEFS)
+	$(CC) $(CFLAGS) $(PROJECTDIR)/phase2/scheduler.c
+
+exceptions.o: $(PROJECTDIR)/phase2/exceptions.c $(DEFS)
+	$(CC) $(CFLAGS) $(PROJECTDIR)/phase2/exceptions.c
+ 
+asl.o: $(PROJECTDIR)/phase1/asl.c $(DEFS)
+	$(CC) $(CFLAGS) $(PROJECTDIR)/phase1/asl.c
+
+pcb.o: $(PROJECTDIR)/phase1/pcb.c $(DEFS)
+	$(CC) $(CFLAGS) $(PROJECTDIR)/phase1/pcb.c
+
+# crti.o: crti.s
+# 	$(AS) crti.s -o crti.o
+
+
+clean:
+	rm -f *.o term*.umps kernel
+
+
+distclean: clean
+	-rm kernel.*.umps tape0.umps
