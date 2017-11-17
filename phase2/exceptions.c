@@ -26,6 +26,7 @@ extern cpu_t currentTOD;
 
 /* global function from interrupts*/
 extern void copyState(state_PTR src, state_PTR dest);
+extern void debug(int a, int b, int c, int d);
   /*just like in interrupts we will need to copy the state
    of the processor to handle what went wrong*/
 
@@ -34,6 +35,7 @@ extern void copyState(state_PTR src, state_PTR dest);
 /**************************************************************************************************/
 
 void tlbManager() {
+  debug(1,2,3,4);
   /* goes to passUpOrDie and sees if a sys5 exception vector
   has been found for the offending process */
   state_t *caller = TLB_OLDAREA; //ie. address of old area defined in uARMTypes.h;
@@ -42,6 +44,7 @@ void tlbManager() {
 }
 
 void pgmTrapHandler() {
+  debug(5,6,7,8);
    /* goes to passUpOrDie and sees if a sys5 exception vector
   has been found for the offending process */
   state_t *caller = PGMTRAP_OLDAREA; //ie. address of old area defined in uARMTypes.h;
@@ -49,17 +52,18 @@ void pgmTrapHandler() {
 }
 
 void syscallHandler(){
+  debug(8,9,10,11);
   //state_PTR caller = (state_PTR) SYSCALLOLDAREA;
   state_t *caller = SYSBK_OLDAREA; /*cpu state when syscallhandler was called*/
   /*int sysRequest = caller->s_r0; /*register 0 will contain an int that
                                 represents which syscall we want to do*/
-  int sysRequest = caller->a3; /*register 2 will contain an int that
+  int sysRequest = caller->a1; /*register 2 will contain an int that
                                 represents which syscall we want to do*/
   //int callerStatus = caller -> s_status;
   int callerStatus = caller-> cpsr;
-  if((sysRequest > 0) && (sysRequest < 9) && ((callerStatus & STATUS_SYS_MODE) != ALLOFF)){
+  if((sysRequest > 0) && (sysRequest < 9) && ((callerStatus & STATUS_SYS_MODE) != STATUS_SYS_MODE)){
     //    25:50                                this might be STATUS_USER_MODE^ (not sure which one)
-    
+    //set cause register to be priveledged instruction
     state_t *program = PGMTRAP_OLDAREA; //save program state to proper spot in table
     copyState(caller, program);
     pgmTrapHandler();
@@ -67,8 +71,7 @@ void syscallHandler(){
   }
   /*set the program counter to the next instruction */
   //caller->s_pc = caller->s_pc + 4;
-  caller->pc = caller->pc + 4;
-
+  debug(sysRequest, 12, 13, 14);
   /* now switch on sysRequest to see what syscall to use*/
   switch(sysRequest){
   case CREATETHREAD:
@@ -95,7 +98,7 @@ void syscallHandler(){
   PANIC();
 }
 
-int sysOne(state_t* caller){
+void sysOne(state_t* caller){
   /*This function will be sys1 call, for creating a process*/
   pcb_t *newProc = allocPcb();
 
@@ -179,12 +182,10 @@ void sysTwoRecursion(pcb_t *head){
 
 void sysThree(state_t* caller){
   /*This function will perform a v operation on a semaphore*/
-
-  pcb_t* newProc = NULL;
-  //int* semV = (int*) caller->s_r1;
-  int* semV = (int*) caller->a1;
-  ++(*semV); /* increment semaphore */
-  if((*semV) <= 0) {
+  pcb_t *newProc = NULL;
+  int *semV = caller->a1;
+  ++semV; /* increment semaphore */
+  if((semV) <= 0) {
     /* something is waiting on the semaphore */
     newProc = removeBlocked(semV);
     if(newProc != NULL){
@@ -201,9 +202,9 @@ void sysThree(state_t* caller){
 void sysFour(state_t* caller){
   /*This function will perform a P operation on a semaphore*/
   //int* semV = (int*) caller->s_r1;
-  int* semV = (int*) caller->a1;
-  --(*semV); /* decrement semaphore */
-  if((*semV) < 0){
+  int* semV = caller->a1;
+  --semV; /* decrement semaphore */
+  if(semV < 0){
     /* something already has control of the semaphore */
     copyState(caller, &(currProc -> p_s));
     insertBlocked(semV, currProc);
@@ -214,7 +215,7 @@ void sysFour(state_t* caller){
 
 }
 
-int sysFive(state_t* caller){
+void sysFive(state_t* caller){
   /*this function returns an exception state vector*/
   //switch(caller->s_r1) {
     switch(caller->a1) {

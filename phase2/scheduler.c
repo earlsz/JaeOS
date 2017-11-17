@@ -19,7 +19,7 @@ extern int semD[MAX_DEVICES];
 /* global vars for maintaining cpu time usage */
 cpu_t TODStarted;
 cpu_t currentTOD;
-
+extern void debug(int a, int b, int c, int d);
 
 /********************** SCHEDULER FUNCTION *********************************/
 /* implementation of a scheduler that uses a round-robin scheduling 
@@ -42,8 +42,10 @@ void scheduler() {
 	if (!emptyProcQ(readyQueue)) { // if ready queue is not empty
 		/* start the next process in the ready queue */
 		currProc = removeProcQ(&readyQueue);
+		TODStarted = getTODLO(); 
+		setTIMER(QUANTUM);
+		LDST(&(currProc->p_s));
 	} 
-
 	else { // if the ready queue is empty
 			currProc = NULL; // no running process
 

@@ -22,6 +22,7 @@ extern int sftBlkCount;
 extern pcb_PTR currProc;
 extern pcb_PTR readyQueue;
 extern int semD[MAX_DEVICES];
+extern void debug(int a, int b, int c, int d);
 
 /* global variables from scheduler */
 extern cpu_t TODStarted;
@@ -61,8 +62,8 @@ void interruptHandler(){
   int * semV;
   pcb_t * wait;
   state_PTR oldInt = (state_PTR) INT_OLDAREA;
-
-
+  
+  debug(1,2,3,4);
   //STCK isn't in the uARM architecture so we use getTODLO instead
   //STCK(startTime); //save the time the interrupt handler started
   startTime = getTODLO(); //save the time the interrupt handler started

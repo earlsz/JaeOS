@@ -22,18 +22,27 @@ int semD[MAX_DEVICES];
 
 extern void test(); //defined in p2test.c
 
+void debug(int a, int b, int c, int d){
+  int i = 73;
+  i++;
+}
+
 
 /******************** MAIN FUNCTION **************************************************************/
 
 void main() {
 	state_t * newLocation;
 	int i;
+	int *rambase;
+	int *ramsize;
+	  rambase = (unsigned int)RAMBASE;
+	  ramsize = (unsigned int)RAMSIZE;
 
 	/* calculate RAMTOP */
 	// Mikey G comment: Actually it is found at a "location".. use RAM_TOP
 	// RAMTOP = 0x00008000 ? look at pg. 25 of uArm Principles of Operations
 	// Define RAMTOP in uARMconst.h?
-	unsigned int RAMTOP = RAMBASE + RAMSIZE;
+	unsigned int RAMTOP = *rambase + *ramsize;
 
 	/* initiaize the PCB and ASL Lists */
 	initPcbs();
@@ -94,20 +103,21 @@ void main() {
 
 
 	/* create a single process ie. allocPcb and make it the current process */ 
-	currProc = allocPcb();
+	pcb_t *p = allocPcb();
+	currProc = p;
 	procCount++; // increment since we created a process
 
 	/* initialize process state. ie. set sp to RAMTOP - FRAMESIZE, enable interrupts, kernel mode on,
 		set pc to address of test, */
-	currProc -> p_s.sp = (RAMTOP - FRAME_SIZE);
-	currProc -> p_s.pc = (unsigned int) test; /* test function in p2test*/
+	p->p_s.sp = (RAMTOP - FRAME_SIZE);
+	p->p_s.pc = (unsigned int) test; /* test function in p2test*/
 	/* interrupts are on and is in kernel mode for test */
-	currProc -> p_s.cpsr = ALLOFF | STATUS_SYS_MODE | INTSDISABLED;
+	p-> p_s.cpsr = ALLOFF | STATUS_SYS_MODE | INTSDISABLED;
 	// ALLOFF defined in p2test.c
 	// STATUS_SYS_MODE and INTSDISABLED defined in uARMTypes.h
 
 	/* insert first process onto the readyQue */
-	insertProcQ(&readyQueue, currProc);
+	insertProcQ(&readyQueue, p);
 	currProc = NULL;
 
 	/* call the scheduler */
