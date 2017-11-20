@@ -55,6 +55,7 @@ void copyState(state_PTR src, state_PTR dest){
 void interruptHandler(){
   /* Acknowledge highest priority interrupt and then give control
       over to the scheduler */
+  debug(10, 10, 10, 10);
   cpu_t startTime, endTime;
   int deviceNum;
   device_t *devReg;
@@ -63,7 +64,6 @@ void interruptHandler(){
   pcb_t * wait;
   state_PTR oldInt = (state_PTR) INT_OLDAREA;
   
-  debug(1,2,3,4);
   //STCK isn't in the uARM architecture so we use getTODLO instead
   //STCK(startTime); //save the time the interrupt handler started
   startTime = getTODLO(); //save the time the interrupt handler started
