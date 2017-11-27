@@ -48,7 +48,7 @@
 #define SEVENTHDEVICE           0X40000000
 #define EIGHTHDEVICE            0X80000000
 
-#define DEVWOSEM                2 //the first 2 devices are unused, we subtract this in certain places
+#define DEVWOSEM                3 //the first 3 devices are unused, we subtract this in certain places
 #define INTDEVREG               0x00000040
 
 #define QUANTUM                 5000 //cpu interval time

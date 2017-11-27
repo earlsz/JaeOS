@@ -46,7 +46,6 @@ void scheduler() {
 		setTIMER(QUANTUM);
 		debug(3, 3, 4, 4);
 		LDST(&(currProc->p_s));
-		debug(10, 1, 10, 10);
 	}
 	else { // if the ready queue is empty
 	   
