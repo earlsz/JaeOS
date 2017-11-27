@@ -47,6 +47,16 @@ typedef struct {
 	unsigned int d_data1;
 } device_t, *device_PTR;
 
+typedef struct {
+	unsigned int rambase;
+	unsigned int ramtop;
+	unsigned int devregbase;
+	unsigned int todhi;
+	unsigned int todlo;
+	unsigned int intervaltimer;
+	unsigned int timescale;
+} devregarea_t;
+
 #define t_recv_status		d_status
 #define t_recv_command		d_command
 #define t_transm_status		d_data0

@@ -18,6 +18,10 @@ int sftBlkCount;
 pcb_PTR currProc;
 pcb_PTR readyQueue;
 int semD[MAX_DEVICES];
+cpu_t startTOD;
+int devStatus[MAX_DEVICES];
+int intTimerFlag;
+cpu_t timeLeft;
 
 
 extern void test(); //defined in p2test.c
@@ -39,9 +43,6 @@ void main() {
 	  ramsize = (unsigned int)RAMSIZE;
 
 	/* calculate RAMTOP */
-	// Mikey G comment: Actually it is found at a "location".. use RAM_TOP
-	// RAMTOP = 0x00008000 ? look at pg. 25 of uArm Principles of Operations
-	// Define RAMTOP in uARMconst.h?
 	unsigned int RAMTOP = *rambase + *ramsize;
 
 	/* initiaize the PCB and ASL Lists */
@@ -52,12 +53,14 @@ void main() {
 	i.e Process Count, Soft-block Count, Ready Queue, and Current Process */
 	readyQueue = mkEmptyProcQ();
 	currProc = NULL;
+	startTOD = 0;
 	procCount = 0;
 	sftBlkCount = 0;
 
 	/* initialize semaphores for each external uARM device to 0 */
 	for(i = 0; i < MAX_DEVICES; ++i){
 		semD[i] = 0;
+		devStatus[i] = 0;
 	}
 
 
