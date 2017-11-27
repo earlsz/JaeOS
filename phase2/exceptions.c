@@ -35,7 +35,7 @@ extern void debug(int a, int b, int c, int d);
 /**************************************************************************************************/
 
 void tlbManager() {
-  debug(1,2,3,4);
+  debug(5, 14, 15, 4096);
   /* goes to passUpOrDie and sees if a sys5 exception vector
   has been found for the offending process */
   state_t *caller = TLB_OLDAREA; //ie. address of old area defined in uARMTypes.h;
@@ -44,7 +44,7 @@ void tlbManager() {
 }
 
 void pgmTrapHandler() {
-  debug(5,6,7,8);
+  debug(1, 2, 3, 4);
    /* goes to passUpOrDie and sees if a sys5 exception vector
   has been found for the offending process */
   state_t *caller = PGMTRAP_OLDAREA; //ie. address of old area defined in uARMTypes.h;
@@ -52,7 +52,7 @@ void pgmTrapHandler() {
 }
 
 void syscallHandler(){
-  debug(8,9,10,11);
+  debug(6, 7, 8, 9);
   //state_PTR caller = (state_PTR) SYSCALLOLDAREA;
   state_t *caller = SYSBK_OLDAREA; /*cpu state when syscallhandler was called*/
   /*int sysRequest = caller->s_r0; /*register 0 will contain an int that
@@ -273,6 +273,7 @@ void sysSeven(state_t *caller){
 void sysEight(state_t *caller){
   /*the program needs somthing from an io device to continue, in that event
    call this function. */
+  debug(caller->a2, caller->a3, caller->a4, caller->a1);
   int index;
   int *sem;
   int lineNum = caller->a2; 
@@ -293,7 +294,7 @@ void sysEight(state_t *caller){
   }
   sem = &(semD[index]);
   --(*sem);
-  if((*sem) < 0) {
+  if(*sem < 0) {
     insertBlocked(sem, currProc);
     copyState(caller, &(currProc -> p_s));
     ++sftBlkCount;

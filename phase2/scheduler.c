@@ -25,7 +25,7 @@ extern void debug(int a, int b, int c, int d);
 /* implementation of a scheduler that uses a round-robin scheduling 
 	algorithm. */
 void scheduler() {
-
+  	debug(2, 2, 2, 2);
 	/* was someone just running? */
 	/* this means a process was running and was then blocked 
 	 * or returned to readyQ for some reason */
@@ -44,9 +44,12 @@ void scheduler() {
 		currProc = removeProcQ(&readyQueue);
 		TODStarted = getTODLO(); 
 		setTIMER(QUANTUM);
+		debug(3, 3, 4, 4);
 		LDST(&(currProc->p_s));
-	} 
+		debug(10, 1, 10, 10);
+	}
 	else { // if the ready queue is empty
+	   
 			currProc = NULL; // no running process
 
 			/* if Proccess Count == 0, then HALT the program */
@@ -65,11 +68,14 @@ void scheduler() {
 			i.e. the processor is waiting for an interrupt to occur */
 			if(procCount > 0 && sftBlkCount > 0) {
 				// 16:00
+			  setTIMER(10000000);
 				// set some local variable interrupts to be enabled and in kernel mode
-				// state_t * status = ALLOFF | STATUS_SYS_MODE | INTSDISABLED
+			  unsigned int status = getSTATUS();
+			  status = STATUS_ENABLE_INT(status);
+				//state_t * status = ALLOFF | STATUS_SYS_MODE | INTSDISABLED
 				// set status to be current status
-				// setSTATUS(status); ?
-
+				setSTATUS(status); 
+                                debug(2, 3, 4, 5);
 				// set control register to ensure VM is off
 				WAIT(); 
 			}

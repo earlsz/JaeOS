@@ -55,6 +55,7 @@ void copyState(state_PTR src, state_PTR dest){
 void interruptHandler(){
   /* Acknowledge highest priority interrupt and then give control
       over to the scheduler */
+  debug(11, 11, 11, 11); //after exceptions, we make it here..
   cpu_t startTime, endTime;
   int deviceNum;
   device_t *devReg;
@@ -63,19 +64,22 @@ void interruptHandler(){
   pcb_t * wait;
   state_PTR oldInt = (state_PTR) INT_OLDAREA;
   
-  debug(1,2,3,4);
-  //STCK isn't in the uARM architecture so we use getTODLO instead
-  //STCK(startTime); //save the time the interrupt handler started
   startTime = getTODLO(); //save the time the interrupt handler started
 
-  int cause = oldInt->CP15_Control; /* which line caused interrupt? */
+  //int cause = oldInt->CP15_Control; /* which line caused interrupt? */
+  int cause = oldInt->CP15_Cause; /* which line caused interrupt? */
+  debug (11, cause, 0, 0); // cause = 3 //makes it here.....
+
   /* single out possible interrupting lines */ 
   int linenum = 0;
   /* An interrupt line will always be on if in handler */
 
   /* get device number */
   int devicenum = getDeviceNumber(cause);
+  debug (11, devicenum, 0, 0); /* .... but won't make it here??.. go to getDeviceNumber function
+				       below for more explanation.. */
     switch(devicenum){
+      debug(11, 1, 1, 1); //doesn't make it here 
 
       case 2://interval timer
         //LDIT(INTERVALTIME);/* load 100 ms into interval timer*/
@@ -96,7 +100,7 @@ void interruptHandler(){
 	}
 
       case 3://disk request
-		    linenum = INT_DISK;
+	linenum = INT_DISK;
       case 4://tape interrupt
         linenum = INT_TAPE;
       case 5://network device
@@ -187,10 +191,18 @@ int getDeviceNumber(unsigned int* bitMap) {
   /* Determines which device on an interrupt line is causing the interrupt
      and returns the position of the highest priority bit in that bitmap,
      starting with 0*/ 
+  debug (11, 11, 10, 10); // makes it here.. duh
+		       
+  debug(11, 8, 8, 8); // makes it here too..duh again.
+/* After this, it goes to the tlbManager for whatever reason..
+   Once in tlbManager it keeps going back and forth between passUpOrDie and
+   tlbManager in an infinite loop? Not sure why.. */ 
+	
 
-
-     // WE DONT HAVE FIRSTDEVICE, SECONDDEVICE, etc. DEFINED ANYWHERE!!!
+  debug(11, *bitMap, 8, 8); // but doesn't make it here....?????? HOW??
+	//has to be something weird to do with bitMap.. once we figure this out, I bet we will make good progress.
   unsigned int cause = *bitMap;
+  //debug(11, cause, 9, 9); // doesn't make it here.. bitMap causing a problem?
   if((cause & FIRSTDEVICE) != 0) {
     return 0;
   }
@@ -222,6 +234,6 @@ int getDeviceNumber(unsigned int* bitMap) {
   else if((cause & EIGHTHDEVICE) != 0){
     return 7;
   }
-
+  debug(11, 9, 9, 9);
   return -1; //there is no bit that is on
 }
