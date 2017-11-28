@@ -14,10 +14,12 @@ extern int procCount;
 extern int sftBlkCount;
 extern pcb_PTR currProc;
 extern pcb_PTR readyQueue;
+extern cpu_t timeLeft;
+extern int intTimerFlag;
 extern int semD[MAX_DEVICES];
 
 /* global vars for maintaining cpu time usage */
-cpu_t TODStarted;
+cpu_t startTOD;
 cpu_t currentTOD;
 extern void debug(int a, int b, int c, int d);
 
@@ -25,7 +27,7 @@ extern void debug(int a, int b, int c, int d);
 /* implementation of a scheduler that uses a round-robin scheduling 
 	algorithm. */
 void scheduler() {
-  	debug(2, 2, 2, 2);
+  debug(10, 11, 12, 13);
 	/* was someone just running? */
 	/* this means a process was running and was then blocked 
 	 * or returned to readyQ for some reason */
@@ -34,17 +36,17 @@ void scheduler() {
 		/* subtract current time from global start time to get this ^ */
 		currentTOD = getTODLO();
 		currProc->cpu_time = (currProc->cpu_time)
-							+ (currentTOD - TODStarted);
+							+ (currentTOD - startTOD);
 	}
 
 	/* start next process in the Proccess Queue assuming readyQueue is
 		not empty */
 	if (!emptyProcQ(readyQueue)) { // if ready queue is not empty
 		/* start the next process in the ready queue */
+	        debug(5, 5, 5, 5);
 		currProc = removeProcQ(&readyQueue);
-		TODStarted = getTODLO(); 
+		startTOD = getTODLO(); 
 		setTIMER(QUANTUM);
-		debug(3, 3, 4, 4);
 		LDST(&(currProc->p_s));
 	}
 	else { // if the ready queue is empty
@@ -66,17 +68,13 @@ void scheduler() {
 			/* If procCount > 0 and sftBlkCount > 0 enter a Wait state.
 			i.e. the processor is waiting for an interrupt to occur */
 			if(procCount > 0 && sftBlkCount > 0) {
-				// 16:00
-			  setTIMER(10000000);
-				// set some local variable interrupts to be enabled and in kernel mode
-			  unsigned int status = getSTATUS();
-			  status = STATUS_ENABLE_INT(status);
-				//state_t * status = ALLOFF | STATUS_SYS_MODE | INTSDISABLED
-				// set status to be current status
-				setSTATUS(status); 
-                                debug(2, 3, 4, 5);
-				// set control register to ensure VM is off
-				WAIT(); 
+                            setTIMER(timeLeft);
+			    intTimerFlag = TRUE;
+			    debug(1, 17, 17, 17);
+			    /*Enable interrupts in the processor*/
+			     setSTATUS(getSTATUS() & ALLINTENABLED);
+			     WAIT();
+		          
 			}
 		}
 

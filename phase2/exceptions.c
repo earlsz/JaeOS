@@ -21,7 +21,7 @@ extern pcb_PTR readyQueue;
 extern int semD[MAX_DEVICES];
 
 /* globals taken from sceduler */
-extern cpu_t TODStarted;
+extern cpu_t startTOD;
 extern cpu_t currentTOD;
 
 /* global function from interrupts*/
@@ -61,6 +61,7 @@ void syscallHandler(){
                                 represents which syscall we want to do*/
   //int callerStatus = caller -> s_status;
   int callerStatus = caller-> cpsr;
+  debug(caller->a4, caller->a1, caller->a2, caller->a3);
   if((sysRequest > 0) && (sysRequest < 9) && ((callerStatus & STATUS_SYS_MODE) != STATUS_SYS_MODE)){
     //    25:50                                this might be STATUS_USER_MODE^ (not sure which one)
     //set cause register to be priveledged instruction
@@ -71,7 +72,6 @@ void syscallHandler(){
   }
   /*set the program counter to the next instruction */
   //caller->s_pc = caller->s_pc + 4;
-  debug(sysRequest, 12, 13, 14);
   /* now switch on sysRequest to see what syscall to use*/
   switch(sysRequest){
   case CREATETHREAD:
@@ -183,9 +183,11 @@ void sysTwoRecursion(pcb_t *head){
 void sysThree(state_t* caller){
   /*This function will perform a v operation on a semaphore*/
   pcb_t *newProc = NULL;
-  int *semV = caller->a1;
-  ++semV; /* increment semaphore */
-  if((semV) <= 0) {
+  int *semV = caller->a2;
+  debug(semV, 3, 3, 3);
+  ++(*semV); /* increment semaphore */
+  debug(0xFFFFFF, 6, 6, 6);
+  if((*semV) <= 0) {
     /* something is waiting on the semaphore */
     newProc = removeBlocked(semV);
     if(newProc != NULL){
@@ -202,9 +204,9 @@ void sysThree(state_t* caller){
 void sysFour(state_t* caller){
   /*This function will perform a P operation on a semaphore*/
   //int* semV = (int*) caller->s_r1;
-  int* semV = caller->a1;
-  --semV; /* decrement semaphore */
-  if(semV < 0){
+  int* semV = caller->a2;
+  --(*semV); /* decrement semaphore */
+  if((*semV) < 0){
     /* something already has control of the semaphore */
     copyState(caller, &(currProc -> p_s));
     insertBlocked(semV, currProc);
@@ -255,7 +257,7 @@ int sysSix(state_t *caller){
   //STCK(now); 
   now = getTODLO();//calculate what now is
   /*give the time to the current process*/
-  currProc->cpu_time = currProc->cpu_time + (now - TODStarted);
+  currProc->cpu_time = currProc->cpu_time + (now - startTOD);
   LDST(caller);//exit exception handler
 }
 
@@ -278,7 +280,7 @@ void sysEight(state_t *caller){
   int *sem;
   int lineNum = caller->a2; 
   int deviceNum = caller->a3; 
-  int read = caller->a4; //a4? /* terminal read / write */
+  int read = caller->a4;  /* terminal read / write */
   
   if(lineNum < INT_DISK || lineNum > INT_TERMINAL){
     sysTwo(); /* illegal IO wait request */
