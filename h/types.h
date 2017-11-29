@@ -1,51 +1,23 @@
 #ifndef TYPES
 #define TYPES
 
-/**************************************************************************** 
- *
- * This header file contains utility types definitions.
- * 
- ****************************************************************************/
-
-#include "/usr/include/uarm/uARMtypes.h"
+#include "../h/const.h"
 
 typedef signed int cpu_t;
-typedef state_t  *state_PTR;
 
-/* process table entry type */
-typedef struct pcb_t {
-	/* process queue fields */
-  struct pcb_t   *p_next, /* ptr to next entry     */
-                 *p_previous;
-
-    /* process tree fields */
-  struct pcb_t    *p_prnt, 		/* ptr to parent         */
-		              *p_child,		/* ptr to 1st child      */
-                  *p_next_sib, /* ptr to next sibling   */
-                  *p_previous_sib;	        
-	
-    /* process status information */
-  state_t	   p_s;			/* processor state       */
-  int		     *p_semAdd;		/* ptr to semaphore on   */
-					/* which proc is blocked */
-
-  cpu_t cpu_time; /* time process spent on CPU in microsecs */
-  state_PTR pgmTrpNew, pgmTrpOld, tlbNew, tlbOld, sysNew, sysOld;
-  
-}  pcb_t, *pcb_PTR;
-
-typedef struct semd_t {
-  struct semd_t *s_next; //next semaphore in the asl
-  int *s_semAdd; //pointer to the address of the semaphore
-  pcb_t *s_procQ; //a queue of procblocks
-} semd_t;
+typedef unsigned int memaddr;
 
 typedef struct {
 	unsigned int d_status;
 	unsigned int d_command;
 	unsigned int d_data0;
 	unsigned int d_data1;
-} device_t, *device_PTR;
+} device_t;
+
+#define t_recv_status		d_status
+#define t_recv_command		d_command
+#define t_transm_status		d_data0
+#define t_transm_command	d_data1
 
 typedef struct {
 	unsigned int rambase;
@@ -57,10 +29,52 @@ typedef struct {
 	unsigned int timescale;
 } devregarea_t;
 
-#define t_recv_status		d_status
-#define t_recv_command		d_command
-#define t_transm_status		d_data0
-#define t_transm_command	d_data1
+#define STATEREGNUM	22
+typedef struct state_t {
+	int	 			s_reg[STATEREGNUM];
+} state_t, *state_PTR;
+
+typedef struct pcb_t {
+	struct pcb_t *p_next;
+	struct pcb_t *p_previous;
+	struct pcb_t *p_prnt;
+	struct pcb_t *p_child;
+	struct pcb_t *p_next_sib;
+	struct pcb_t *p_previous_sib;
+	state_PTR oldSys;
+	state_PTR newSys;
+	state_PTR oldPrgm;
+	state_PTR newPrgm;
+	state_PTR oldTlb;
+	state_PTR newTlb;
+	state_t p_s;
+	cpu_t p_time;
+	int *p_semAdd;
+} pcb_t, *pcb_PTR;
+
+#define	s_a1			s_reg[0]
+#define	s_a2			s_reg[1]
+#define s_a3			s_reg[2]
+#define s_a4			s_reg[3]
+#define s_v1			s_reg[4]
+#define s_v2			s_reg[5]
+#define s_v3			s_reg[6]
+#define s_v4			s_reg[7]
+#define s_v5			s_reg[8]
+#define s_v6			s_reg[9]
+#define s_sl			s_reg[10]
+#define s_fp			s_reg[11]
+#define s_ip			s_reg[12]
+#define s_sp			s_reg[13]
+#define s_lr			s_reg[14]
+#define s_pc			s_reg[15]
+#define s_cpsr			s_reg[16]
+#define s_CP15_Control	s_reg[17]
+#define s_CP15_EntryHi	s_reg[18]
+#define s_CP15_Cause	s_reg[19]
+#define s_todHI			s_reg[20]
+#define s_todLO			s_reg[21]
+
 
 
 

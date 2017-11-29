@@ -1,7 +1,14 @@
 #ifndef INITIAL
 #define INITIAL
 
-/********************** INITIAL.E *******************************/
+/********************** INITIAL.E *******************************
+*
+* The externals declaration file for the Initializer Module for
+* JAEOS
+*
+* Written by Jacob Wagner
+* Last Modified: 4-20-16
+*/
 
 #include "../h/types.h"
 #include "../h/const.h"

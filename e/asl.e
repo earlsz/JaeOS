@@ -1,17 +1,10 @@
 #ifndef ASL
 #define ASL
 
-/************************** ASL.E ******************************
-*
-*  The externals declaration file for the Active Semaphore List
-*    Module.
-*
-*  Written by Mikeyg
-*/
+/************************** ASL.E *******************************/
 
 #include "../h/types.h"
 
-extern void insertSemd(semd_t **list, semd_t *newSemDesc);
 extern int insertBlocked (int *semAdd, pcb_PTR p);
 extern pcb_PTR removeBlocked (int *semAdd);
 extern pcb_PTR outBlocked (pcb_PTR p);
