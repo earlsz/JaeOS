@@ -10,9 +10,9 @@
  *                                                              *
  ****************************************************************/
 
-#include "/home/joseph/OpSys/JaeOs/h/types.h"
-#include "/home/joseph/OpSys/JaeOs/h/const.h"
-#include "/home/joseph/OpSys/JaeOs/e/pcb.e"
+#include "../h/types.h"
+#include "../h/const.h"
+#include "../e/pcb.e"
 
 
 static pcb_t *pcbFree_h; //pointer to the head of the pcbFree list

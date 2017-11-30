@@ -5,333 +5,468 @@
 
 #include "../h/const.h"
 #include "../h/types.h"
-#include "../e/initial.e"
-#include "../e/scheduler.e"
-#include "../e/interrupts.e"
+
 #include "../e/pcb.e"
 #include "../e/asl.e"
+#include "../e/exceptions.e"
+#include "../e/scheduler.e"
+#include "../e/initial.e"
 
 #include "/usr/include/uarm/libuarm.h"
 
-/* global variables taken from initial */
-extern int procCount;
-extern int sftBlkCount;
-extern pcb_PTR currProc;
-extern pcb_PTR readyQueue;
-extern int semD[MAX_DEVICES];
 
-/* globals taken from sceduler */
-extern cpu_t startTOD;
-extern cpu_t currentTOD;
+void pgmTrapHandler(){
+	
+	state_t* oldState = (state_t*) PROGTRPOLDADDR;
+		
+	/*Call a Program Trap Pass Up or Die*/
+	passUpOrDie(PROGTRAP);
+	
+}
 
-/* global function from interrupts*/
-extern void copyState(state_PTR src, state_PTR dest);
-extern void debug(int a, int b, int c, int d);
-  /*just like in interrupts we will need to copy the state
-   of the processor to handle what went wrong*/
+/***********************************************************************
+ *Function that handles a TLB trap exception. All TLB trap exceptions 
+ *are handled as pass up or die as a TLB trap.
+ **********************************************************************/
+void tlbHandler(){
+	
+	state_t* oldState = (state_t*) TLBOLDADDR;
+		
+	/*Call a TLB Trap Pass Up or Die*/
+	passUpOrDie(TLBTRAP);
+	
+}
+
+void debug(int a, int b, int c, int d){ int i = 5;}
+
+/****************************SYSCALLHANDLER*****************************/
+void sysCallHandler(){
+ 	debug(1,2,3,4);
+	/*Local Variable Declarations*/
+	pcb_PTR newPcb;
+	pcb_PTR process = NULL;
+	int *semAdd;
+	int semDev;
+	cpu_t elapsedTime;
+	cpu_t stopTOD;
+	state_t *sysCallOld;
+	state_t *progTrpOld;
+	int system = FALSE;
+	
+	
+	state_t* oldState = (state_t*) SYSCALLOLDADDR;
+	int sysCallNum = oldState->s_a1;
+	
+	/*Increment PC by 8*/
+	oldState->s_pc = oldState->s_pc + 8;
+	
+	/*Move the old state into the current process*/
+	moveState(oldState, &(currentProcess->p_s));
+	
+	/*If the state was in system mode...*/
+	if((currentProcess->p_s.s_cpsr & SYSTEMMODE) == SYSTEMMODE){
+		system = TRUE;
+	}
+	
+	/*If in system mode...*/
+	if(system){
+		
+		/*Based on the type of Syscall...*/
+		switch(sysCallNum){
+
+			//sys1
+			case CREATEPROCESS:		
+				newPcb = allocPcb();
+				
+				/*If the free list was not empty...*/
+				if(newPcb != NULL){
+					
+					/*Copy SUCCESS code into return register*/
+					oldState->s_a1 = SUCCESS;
+
+					processCount++;
+					
+					/*Copy the state from a1 to the new pcb*/
+					moveState((state_t *) oldState->s_a2, 
+														&(newPcb->p_s));
+					
+					/*Make it a child of current process and add it to
+					 *the ready queue
+					 */
+					insertChild(currentProcess, newPcb);
+					insertProcQ(&(readyQueue), newPcb);	
+				}
+				
+				/*The free list was empty*/
+				else{
+					
+					/*Copy FAILURE code into return register*/
+					oldState->s_a1 = FAILURE;
+				}
+				
+				/*Return to current process*/				
+				headBackHome();
+				break;
+				
+			//sys2
+			case TERMINATEPROCESS:
+			
+				/*Recursively kill process and children*/
+				nukeItTilItPukes(currentProcess);
+				currentProcess = NULL;
+				
+				/*Get a new job*/
+				scheduler();
+				break;
+				
+			//sys3				
+			case VERHOGEN:
+						
+				semAdd = (int *) oldState->s_a2;
+				
+				/*Increment semaphore address*/
+				*semAdd = *semAdd + 1;
+				
+				if(*semAdd <= 0){
+					
+					/*Unblock the next process*/
+					process = removeBlocked(semAdd);
+					process->p_semAdd = NULL;
+					
+					/*Add it to the ready queue*/
+					insertProcQ(&(readyQueue), process);
+				}
+
+				/*Return to current process*/
+				headBackHome();
+				break;
+
+			//sys4
+			case PASSEREN:
+							
+				semAdd = (int *) oldState->s_a2;
+				
+				/*Decrement semaphore address*/
+				*semAdd = *semAdd - 1;
+												
+				if(*semAdd < 0){
+										
+					/*Store ending TOD*/
+					STCK(stopTOD);
+					
+					/*Store elapsed time*/
+					elapsedTime = stopTOD - startTOD;
+					currentProcess->p_time = currentProcess->p_time 
+														+ elapsedTime;
+					timeLeft = timeLeft - elapsedTime;
+					
+					/*Block the currentProcess*/
+					insertBlocked(semAdd, currentProcess);
+					currentProcess = NULL;
+										
+					/*Get a new job*/
+					scheduler();
+				}
+				
+				/*Return to current process*/
+				headBackHome();
+				break;
+			
+			//sys5
+			case SESV:
+				
+				/*Pass to Syscall 5 helper function*/
+				sysFiveHandle(oldState->s_a2); 
+				break;
+			
+			//sys6
+			case GETCPUTIME:
+			
+				/*Store ending TOD*/
+				STCK(stopTOD);
+				
+				/*Store elapsed time*/
+				elapsedTime = stopTOD - startTOD;
+				currentProcess->p_time = currentProcess->p_time 
+													+ elapsedTime;
+				timeLeft = timeLeft - elapsedTime;
+				
+				/*Copy current process time into return register*/		
+				currentProcess->p_s.s_a1 = currentProcess->p_time;
+				
+				/*Store starting TOD*/
+				STCK(startTOD);
+				
+				/*Return to previous process*/
+				headBackHome();
+				break;
+				
+			//sys7			
+			case WAITFORCLOCK:
+				
+				semDev = CLCKTIMER;
+				
+				/*Decrement semaphore address*/
+				semaphoreArray[semDev] = semaphoreArray[semDev] - 1;
+				if(semaphoreArray[semDev] < 0){
+										
+					/*Store ending TOD*/
+					STCK(stopTOD);
+					
+					/*Store elapsed time*/
+					elapsedTime = stopTOD - startTOD;
+					currentProcess->p_time = currentProcess->p_time 
+														+ elapsedTime;
+					timeLeft = timeLeft - elapsedTime;
+					
+					/*Block the process*/
+					insertBlocked(&(semaphoreArray[semDev]), currentProcess);
+					currentProcess = NULL;
+					softBlockCount++;
+					
+					/*Get a new job*/
+					scheduler();
+				}
+				
+				/*ERROR*/				
+				PANIC();
+				break;
+				
+			//sys8
+			case WAITFORIO:
+				
+				/*Get the proper semaphore device number*/
+				semDev = DEVPERINT*(oldState->s_a2 - DISKINT) + oldState->s_a3;
+							
+				/*If the terminal is a write terminal...*/					
+				if(!(oldState->s_a4) && (oldState->s_a2 == TERMINT)){
+					semDev = semDev + DEVPERINT;
+				}
+				
+				/*Decrement semaphore address*/
+				semaphoreArray[semDev] = semaphoreArray[semDev] - 1;
+
+				if(semaphoreArray[semDev] < 0){
+										
+					/*Store ending TOD*/
+					STCK(stopTOD);
+					
+					elapsedTime = stopTOD - startTOD;
+					currentProcess->p_time = currentProcess->p_time + elapsedTime;
+					timeLeft = timeLeft - elapsedTime;
+					
+					/*Block the process*/
+					insertBlocked(&(semaphoreArray[semDev]), currentProcess);
+					currentProcess = NULL;
+					softBlockCount++;	
+					
+					/*Get a new job*/	
+					scheduler();
+				}
+				else {
+					currentProcess->p_s.s_a1 = devStatus[semDev];
+					headBackHome();
+				}
+				break;
+				
+			//any other syscalls come here to die...				
+			default:
+				
+				/*Call a Syscall Pass Up or Die*/
+				passUpOrDie(SYSTRAP);
+				break;
+				
+		}
+	}
+	
+	/*The process was not in system mode*/
+	
+	/*If it was a Syscall 1-8...*/
+	if(sysCallNum >= CREATEPROCESS && sysCallNum <= WAITFORIO){
+		
+		/*Get the new areas in memory*/
+		sysCallOld = (state_t *) SYSCALLOLDADDR;
+		progTrpOld = (state_t *) PROGTRPOLDADDR;
+		
+		/*Move state from sysCallOld to progTrpOld*/
+		moveState(sysCallOld, progTrpOld);
+			
+		/*Set cause register to priviledged instruction*/
+		progTrpOld->s_CP15_Cause = RESERVED;
+
+		/*Pass up to Program Trap Handler*/
+		pgmTrapHandler();
+	}
+	
+	/*Syscall 9-255*/
+	
+	/*Call a Syscall Pass Up or Die*/
+	passUpOrDie(SYSTRAP);
+	
+	
+}
 
 
+void passUpOrDie(int type){
+	
+	/*Based on the type of trap...*/
+	switch(type){
+		
+		case PROGTRAP:
+				
+			/*If the handler has already been set up...*/
+			if(currentProcess->oldPrgm != NULL){
+				
+				/*Move the areas around*/
+				moveState((state_t *) PROGTRPOLDADDR, (currentProcess->oldPrgm));
+			
+				
+				/*Return to the current process*/
+				headBackHome();
+			}
+			break;
+		
+		case TLBTRAP:
+			
+			/*If the handler has already been set up...*/
+			if(currentProcess->oldTlb != NULL){
+				
+				/*Move the areas around*/
+				moveState((state_t *) TLBOLDADDR, (currentProcess->oldTlb));
+				moveState(currentProcess->newTlb, &(currentProcess->p_s));	
+				
+				/*Return to current process*/
+				headBackHome();
+			}
+			break;
+			
+		case SYSTRAP:
+		
+			/*If the handler has already been set up...*/
+			if(currentProcess->oldSys != NULL){
+				
+				/*Move the areas around*/
+				moveState((state_t *) SYSCALLOLDADDR, (currentProcess->oldSys));
+				moveState(currentProcess->newSys, &(currentProcess->p_s));
+				
+				/*Return to current process*/
+				headBackHome();
+			}
+			break;
+	
+	}
+	
+	/*Kill the job and get a new one*/
+	nukeItTilItPukes(currentProcess);
+	scheduler();
+}
+	
+//sys5 handler
+void sysFiveHandle(int type){
+	/*Get the old status*/
+	state_t* oldState = (state_t*) SYSCALLOLDADDR;
+	
+	/*Based on the type of trap...*/
+	switch(type){
+		
+		case TLBTRAP:
+		
+			/*If the area hasn't already been populated...*/
+			if(currentProcess->oldTlb == NULL){
+				
+				/*Set old and new areas*/
+				currentProcess->oldTlb = (state_t *)oldState->s_a3;
+				currentProcess->newTlb = (state_t *)oldState->s_a4;
+				
+				/*Return to current process*/
+				headBackHome();
+			}
+			
+		case PROGTRAP:
+			
+			/*If the area hasn't been already populated...*/
+			if(currentProcess->oldPrgm == NULL){
+				
+				/*Set old and new areas*/
+				currentProcess->oldPrgm = (state_t *)oldState->s_a3;
+				currentProcess->newPrgm = (state_t *)oldState->s_a4;
+				
+				/*Return to current process*/
+				headBackHome();
+			}
+			
+		case SYSTRAP:
+			
+			/*If the area hasn't been already populated...*/
+			if(currentProcess->oldSys == NULL){
+				
+				/*Set old and new areas*/
+				currentProcess->oldSys = (state_t *)oldState->s_a3;
+				currentProcess->newSys = (state_t *)oldState->s_a4;
+				
+				/*Return to current process*/
+				headBackHome();
+			}
+	}
+	
+	/*Kill the job and get a new one*/
+	nukeItTilItPukes(currentProcess);
+	scheduler();
+}
 
-/**************************************************************************************************/
 
-void tlbManager() {
-  debug(5, 14, 15, 4096);
-  /* goes to passUpOrDie and sees if a sys5 exception vector
-  has been found for the offending process */
-  state_t *caller = TLB_OLDAREA; //ie. address of old area defined in uARMTypes.h;
-  passUpOrDie(caller, TLBTRAP);
+void headBackHome(){
+	
+	/*Load the current process*/
+	LDST(&(currentProcess->p_s));
 
 }
 
-void pgmTrapHandler() {
-  debug(1, 2, 3, 4);
-   /* goes to passUpOrDie and sees if a sys5 exception vector
-  has been found for the offending process */
-  state_t *caller = PGMTRAP_OLDAREA; //ie. address of old area defined in uARMTypes.h;
-  passUpOrDie(caller, PROGTRAP);
+/***********************************************************************
+ *Function that recursively kills a process and all of its children. It
+ *performs head recursion and checks to see if the process killed was
+ *the current process, on the ready queue or blocked by a semaphore and
+ *makes changes to processCount and softBlockCount accordingly.
+ *RETURNS: N/a
+ **********************************************************************/
+void nukeItTilItPukes(pcb_PTR parent){	
+	
+	/*While it has children...*/
+	while(!emptyChild(parent)){
+		/*Recursive death on child*/
+		nukeItTilItPukes(removeChild(parent));
+	}
+	
+	/*If the current process is the root...*/
+	if (currentProcess == parent){
+		outChild(parent);
+	}
+	
+	/*If the process is on the ready queue...*/
+	else if(parent->p_semAdd == NULL){
+		outProcQ(&(readyQueue), parent);
+	}
+	
+	else{
+		/*Process is on the asl*/
+		outBlocked(parent);
+		
+		/*If the pcb was on a device semaphore...*/
+		if((parent->p_semAdd >= &(semaphoreArray[0])) && 
+					(parent->p_semAdd <= &(semaphoreArray[CLCKTIMER]))){
+						
+			softBlockCount--;
+		}
+		/*The pcb is normally blocked*/
+		else{
+			
+			/*Decrement semaphore address*/
+			*(parent->p_semAdd) = *(parent->p_semAdd) + 1;
+		}
+	}
+	
+	/*Free the process block and decrement process count*/
+	freePcb(parent);
+	processCount--;
 }
-
-void syscallHandler(){
-  debug(6, 7, 8, 9);
-  //state_PTR caller = (state_PTR) SYSCALLOLDAREA;
-  state_t *caller = SYSBK_OLDAREA; /*cpu state when syscallhandler was called*/
-  /*int sysRequest = caller->s_r0; /*register 0 will contain an int that
-                                represents which syscall we want to do*/
-  int sysRequest = caller->a1; /*register 2 will contain an int that
-                                represents which syscall we want to do*/
-  //int callerStatus = caller -> s_status;
-  int callerStatus = caller-> cpsr;
-  debug(caller->a4, caller->a1, caller->a2, caller->a3);
-  if((sysRequest > 0) && (sysRequest < 9) && ((callerStatus & STATUS_SYS_MODE) != STATUS_SYS_MODE)){
-    //    25:50                                this might be STATUS_USER_MODE^ (not sure which one)
-    //set cause register to be priveledged instruction
-    state_t *program = PGMTRAP_OLDAREA; //save program state to proper spot in table
-    copyState(caller, program);
-    pgmTrapHandler();
-    
-  }
-  /*set the program counter to the next instruction */
-  //caller->s_pc = caller->s_pc + 4;
-  /* now switch on sysRequest to see what syscall to use*/
-  switch(sysRequest){
-  case CREATETHREAD:
-    sysOne(caller);
-  case TERMINATETHREAD:
-    sysTwo();
-  case VERHOGEN:
-    sysThree(caller);
-  case PASSEREN:
-    sysFour(caller);
-  case SPECTRAPVEC:
-    sysFive(caller);
-  case GETCPUTIME:
-    sysSix(caller);
-  case WAITCLOCK:
-    sysSeven(caller);
-  case WAITIO:
-    sysEight(caller);
-  default:
-    passUpOrDie(caller);
-    break;
-  }
-  /*it shouldnt make it here*/
-  PANIC();
-}
-
-void sysOne(state_t* caller){
-  /*This function will be sys1 call, for creating a process*/
-  pcb_t *newProc = allocPcb();
-
-  if(newProc == NULL){ // new process cannot be created because no more free Pcbs
-    caller -> a1 = -1; // FAILURE.. error code of -1 is placed/returned in the caller’s A1
-    LDST(caller); /*return CPU to caller */
-  }
-  ++procCount;
-
-  /* make new process a child of current process */
-  /*temp -> p_prnt = currProc;*/
-  insertChild(currProc, newProc);
-  
-  /* add to the ready queue */
-  insertProcQ(&readyQueue, newProc);
-
-  /* copy CPU state in A2 to new process */
- // copyState((state_t*) caller -> s_r1, &(newProc -> p_s)); //the physical address of a processor state in A2
-  copyState((state_t*) caller -> a2, &(newProc -> p_s));
-
-  /* set return value */
-  caller -> a1 = 0; // SUCCESS.. return the value 0 in the caller’s A1
-
-  /* return CPU to caller */
-  LDST(caller);
-
-}
-
-void sysTwo(){
-  /* This function will be sys2, for terminating a process
-   * Also recursively removes all children of head. */
-
-  if(emptyChild(currProc)){
-    /* current process has no children */
-    outChild(currProc);
-    freePcb(currProc);
-    --procCount;
-  } 
-  else {
-    /*children need to be recursively deleted*/
-    sysTwoRecursion(currProc);
-  }
-
-  /* no current process anymore */
-  currProc = NULL;
-  /* call scheduler */
-  scheduler();
-
-}
-
-void sysTwoRecursion(pcb_t *head){
-  /*this function recursively deletes the children of head*/
-  //there are children
-  while(!emptyChild(head)){ 
-      sysTwoRecursion(removeChild(head)); //remove all children
-      }
-      if(head -> p_semAdd != NULL){
-        /* process blocked, remove self from ASL */
-        int* sem = head -> p_semAdd;
-        outBlocked(head);
-
-        /* check if blocked on device */
-        if(sem >= &(semD[0]) && sem <= &(semD[MAX_DEVICES-1])){ 
-          sftBlkCount--;
-        } 
-        else {
-         ++(*sem); /* increment semaphore */
-        }
-
-      } else if (head == currProc) {
-        /* remove process from it's parent */
-        outChild(currProc);
-      } else {
-        /* remove process from readyQueue */
-        outProcQ(&readyQueue, head);
-      }
-      /* free self after we have no more children */
-      freePcb(head);
-      --procCount;
-}
-
-void sysThree(state_t* caller){
-  /*This function will perform a v operation on a semaphore*/
-  pcb_t *newProc = NULL;
-  int *semV = caller->a2;
-  debug(semV, 3, 3, 3);
-  ++(*semV); /* increment semaphore */
-  debug(0xFFFFFF, 6, 6, 6);
-  if((*semV) <= 0) {
-    /* something is waiting on the semaphore */
-    newProc = removeBlocked(semV);
-    if(newProc != NULL){
-      /* add it to the ready queue */
-      insertProcQ(&readyQueue, newProc);
-    } else {
-      /* nothing was waiting on semaphore */
-    }
-  }
-  /* always return control to caller */
-  LDST(caller);
-}
-
-void sysFour(state_t* caller){
-  /*This function will perform a P operation on a semaphore*/
-  //int* semV = (int*) caller->s_r1;
-  int* semV = caller->a2;
-  --(*semV); /* decrement semaphore */
-  if((*semV) < 0){
-    /* something already has control of the semaphore */
-    copyState(caller, &(currProc -> p_s));
-    insertBlocked(semV, currProc);
-    scheduler();
-  }
-  /* nothing had control of the sem, return control to caller */
-  LDST(caller);
-
-}
-
-void sysFive(state_t* caller){
-  /*this function returns an exception state vector*/
-  //switch(caller->s_r1) {
-    switch(caller->a1) {
-    case TLBTRAP:
-      if(currProc->tlbNew != NULL) {
-        sysTwo(); /* already called for this type */
-      }
-      /* assign exception vector values */
-      currProc->tlbNew = (state_PTR) caller->a4; //a4 instead of s_r3? pg.21 of jaeOS document
-      currProc->tlbOld = (state_PTR) caller->a3; //a3 instead of s_r2?
-      break;
-      
-    case PROGTRAP:
-      if(currProc->pgmTrpNew != NULL) {
-        sysTwo();
-      }
-      /* assign exception vector values */
-      currProc->pgmTrpNew = (state_PTR) caller->a4;
-      currProc->pgmTrpOld = (state_PTR) caller->a3;
-      break;
-      
-    case SYSTRAP:
-      if(currProc->sysNew != NULL) {
-          sysTwo(); /* already called for this type */
-      }
-      /* assign exception vector values */
-      currProc->sysNew = (state_PTR) caller->a4;
-      currProc->sysOld = (state_PTR) caller->a3;
-      break;
-    }
-   LDST(caller); //loadstate of the process that called the exception handler
-}
-
-int sysSix(state_t *caller){
-  /*get cpu time, give it to the correct process, then return to what we were doing*/
-  cpu_t now;
-  //STCK(now); 
-  now = getTODLO();//calculate what now is
-  /*give the time to the current process*/
-  currProc->cpu_time = currProc->cpu_time + (now - startTOD);
-  LDST(caller);//exit exception handler
-}
-
-void sysSeven(state_t *caller){
-  /*Wait for the sys clock to get back from whatever it was doing
-   its assistance is needed. */
-  int* semV = (int*) &(semD[MAX_DEVICES-1]);
-  --(*semV); /* decrement semaphore */
-  insertBlocked(semV, currProc);
-  copyState(caller, &(currProc -> p_s)); /* store state back in currProc*/
-  ++sftBlkCount;
-  scheduler();
-}
-
-void sysEight(state_t *caller){
-  /*the program needs somthing from an io device to continue, in that event
-   call this function. */
-  debug(caller->a2, caller->a3, caller->a4, caller->a1);
-  int index;
-  int *sem;
-  int lineNum = caller->a2; 
-  int deviceNum = caller->a3; 
-  int read = caller->a4;  /* terminal read / write */
-  
-  if(lineNum < INT_DISK || lineNum > INT_TERMINAL){
-    sysTwo(); /* illegal IO wait request */
-  }
-  
-  /* compute which device */
-  if(lineNum == INT_TERMINAL && read == TRUE){
-    /* terminal read operation */
-    index = DEV_PER_INT * (lineNum - DEVWOSEM + read) + deviceNum;
-  } else {
-    /* anything else */
-    index = DEV_PER_INT * (lineNum - DEVWOSEM) + deviceNum;
-  }
-  sem = &(semD[index]);
-  --(*sem);
-  if(*sem < 0) {
-    insertBlocked(sem, currProc);
-    copyState(caller, &(currProc -> p_s));
-    ++sftBlkCount;
-    scheduler();
-  }
-  LDST(caller);
-}
-
-void passUpOrDie(state_PTR caller, int reason){
-/*if an exception vector has been set for whatever unhandled operation that
-  has been encountered, the error is passed up to the handler. */
-
-/* if a sys5 has been called*/ 
-  switch(reason){
-    case SYSTRAP: /* syscall exception i.e. vector = 2 */
-      if(currProc -> sysNew != NULL){
-        /* yes a sys trap created */
-        copyState(caller, currProc -> sysOld);
-        LDST(currProc->sysNew);
-      }
-    break;
-    case TLBTRAP: /* TLB trap exception i.e vector = 0 */
-      if(currProc -> tlbNew != NULL){
-        /* a tlb trap was created */
-        copyState(caller, currProc -> tlbOld);
-        LDST(currProc -> tlbNew);
-      }
-    break;
-    case PROGTRAP: /* pgmTrp exception i.e vector = 1 */
-      if(currProc -> pgmTrpNew != NULL){
-        /* a pgm trap was created */
-        copyState(caller, currProc -> pgmTrpOld);
-        LDST(currProc -> pgmTrpNew);
-      }
-    break;
-  }
-  sysTwo(); /* if no vector defined, kill process */
-}
+	

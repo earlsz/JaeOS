@@ -4,128 +4,115 @@
 
 #include "../h/const.h"
 #include "../h/types.h"
-#include "../e/asl.e"
+
 #include "../e/pcb.e"
+#include "../e/asl.e"
+
+#include "../e/scheduler.e"
 #include "../e/exceptions.e"
 #include "../e/interrupts.e"
 
 #include "/usr/include/uarm/libuarm.h"
 
 
- /* Global variables */
-int procCount;
-int sftBlkCount;
-pcb_PTR currProc;
+int processCount;
+int softBlockCount;
+pcb_PTR currentProcess;
 pcb_PTR readyQueue;
-int semD[MAX_DEVICES];
 cpu_t startTOD;
-int devStatus[MAX_DEVICES];
+int semaphoreArray[MAXSEMA]; 
+int devStatus[MAXSEMA];
 int intTimerFlag;
 cpu_t timeLeft;
 
-
-extern void test(); //defined in p2test.c
-
-void debug(int a, int b, int c, int d){
-  int i = 73;
-  i++;
-}
+extern void test();
 
 
-/******************** MAIN FUNCTION **************************************************************/
-
-void main() {
-	state_t * newLocation;
+int main(){
+	
+	/*Local Variable Declarations*/
 	int i;
-	int *rambase;
-	int *ramsize;
-	  rambase = (unsigned int)RAMBASE;
-	  ramsize = (unsigned int)RAMSIZE;
+	pcb_PTR start = NULL;
+	state_t *statePtr;
+	
+	devregarea_t *bus = (devregarea_t *) DEVREGAREAADDR;
 
-	/* calculate RAMTOP */
-	unsigned int RAMTOP = *rambase + *ramsize;
-
-	/* initiaize the PCB and ASL Lists */
-	initPcbs();
-	initASL();
-
-	/* initialize nucleus maintained varibales
-	i.e Process Count, Soft-block Count, Ready Queue, and Current Process */
-	readyQueue = mkEmptyProcQ();
-	currProc = NULL;
-	startTOD = 0;
-	procCount = 0;
-	sftBlkCount = 0;
-
-	/* initialize semaphores for each external uARM device to 0 */
-	for(i = 0; i < MAX_DEVICES; ++i){
-		semD[i] = 0;
+	/*Set status to all interrupts disabled and system mode on*/
+	setSTATUS(ALLOFF | IRQDISABLED | FIQDISABLED | SYSTEMMODE);
+	
+	
+	/*Initialize array of semaphores to 0*/
+	for (i = 0; i < MAXSEMA; i++){
+		semaphoreArray[i] = 0;
 		devStatus[i] = 0;
 	}
-
-
-	/***** initialize the 4 new "areas" at a specific memory location ******/
-		// areas: SysCall, Program Trap, TLB Management, and Interrupts
-	/* Syscall */
-	//newLocation =  (state_t *) 0x00007268 //SysCall new
-	newLocation =  (state_t *) SYSBK_NEWAREA;
-	newLocation -> sp = RAMTOP; 
-	//newLocation -> cpsr = ALLOFF; 
-	// Mikey G comment: arrow pointing to ALLOFF and says "turn on bits for sys mode & ints being
-	// disabled"
-	newLocation -> cpsr = ALLOFF | INTSDISABLED | STATUS_SYS_MODE; //mask all interrupts and be in kernel mode
-	newLocation -> pc = (unsigned int) syscallHandler; // syscallHandler defined in exceptions.c
-	newLocation -> CP15_Control = ALLOFF; //turn virtual memory off
-
-	/* ProgramTrap */
-	// newLocation =  (state_t *) 0x000071B8 //PGMT New
-	newLocation = (state_t *) PGMTRAP_NEWAREA;
-	newLocation -> sp = RAMTOP; 
-	//newLocation -> cpsr = ALLOFF;
-	newLocation -> cpsr = ALLOFF | INTSDISABLED | STATUS_SYS_MODE; //mask all interrupts and be in kernel mode
-	newLocation -> pc = (unsigned int) pgmTrapHandler; // pgmTrap defined in exceptions.c
-	newLocation -> CP15_Control = ALLOFF; //turn virtual memory off
-
-	/* TLB Management */
-	//newLocation =  (state_t *) 0x00007108 //TLB New
-	newLocation = (state_t *) TLB_NEWAREA;
-	newLocation -> sp = RAMTOP;
-	//newLocation -> cpsr = ALLOFF;
-	newLocation -> cpsr = ALLOFF | INTSDISABLED | STATUS_SYS_MODE; //mask all interrupts and be in kernel mode
-	newLocation -> pc = (unsigned int) tlbManager; // tlbManager defined in exceptions.c
-	newLocation -> CP15_Control = ALLOFF; //turn virtual memory off
-
-	/* Interrupts */
-	//newLocation =  (state_t *) 0x00007058 //Interrupt New
-	newLocation = (state_t *) INT_NEWAREA;
-	newLocation -> sp = RAMTOP; 
-	//newLocation -> cpsr = ALLOFF; 
-	newLocation -> cpsr = ALLOFF | INTSDISABLED | STATUS_SYS_MODE; //mask all interrupts and be in kernel mode
-	newLocation -> pc = (unsigned int) interruptHandler; // interruptHandler defined in interrupts.c
-	newLocation -> CP15_Control = ALLOFF; //turn virtual memory off
-
-
-	/* create a single process ie. allocPcb and make it the current process */ 
-	pcb_t *p = allocPcb();
-	currProc = p;
-	procCount++; // increment since we created a process
-
-	/* initialize process state. ie. set sp to RAMTOP - FRAMESIZE, enable interrupts, kernel mode on,
-		set pc to address of test, */
-	p->p_s.sp = (RAMTOP - FRAME_SIZE);
-	p->p_s.pc = (unsigned int) test; /* test function in p2test*/
-	/* interrupts are on and is in kernel mode for test */
-	p-> p_s.cpsr = ALLOFF | STATUS_SYS_MODE | INTSDISABLED;
-	// ALLOFF defined in p2test.c
-	// STATUS_SYS_MODE and INTSDISABLED defined in uARMTypes.h
-
-	/* insert first process onto the readyQue */
-	insertProcQ(&readyQueue, p);
-	currProc = NULL;
-
-	/* call the scheduler */
+	
+	/*Populate the four new areas in low memory
+	 *	Set the stack pointer to last page of physical
+	 *	Set the pc to address of handler
+	 *	Set the cpsr to
+	 * 		Interrupts disabled
+	 * 		Supervisor mode on
+	 */
+	statePtr = (state_t *) SYSCALLNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)sysCallHandler;		
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | IRQDISABLED | 
+								FIQDISABLED | SYSTEMMODE;
+	
+	statePtr = (state_t *) PROGTRPNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)pgmTrapHandler;
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | IRQDISABLED | 
+								FIQDISABLED | SYSTEMMODE;
+								
+	statePtr = (state_t *) TLBNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)tlbHandler;
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | IRQDISABLED | 
+								FIQDISABLED | SYSTEMMODE;
+	
+	statePtr = (state_t *) INTERRUPTNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)interruptHandler;
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | IRQDISABLED | 
+								FIQDISABLED | SYSTEMMODE;
+	
+	/*Initialize PCBs and ASL*/
+	initPcbs();
+	initASL();
+	
+	/*Initialize global variables*/
+	processCount = 0;
+	softBlockCount = 0;
+	currentProcess = NULL;
+	startTOD = 0;
+	readyQueue = mkEmptyProcQ();
+	
+	/*Allocate a starting process*/
+	start = allocPcb();
+	
+	STST(&(start->p_s));
+	start->p_s.s_pc = (memaddr) test;
+	start->p_s.s_sp = bus->ramtop - (2 * PAGESIZE);
+	start->p_s.s_cpsr = ALLOFF | SYSTEMMODE;
+	
+	/*Start the interval timer and set pseudo clock timer*/
+	timeLeft = INTERVALTIME;
+	intTimerFlag = FALSE;
+	setTIMER(QUANTUM);
+	 
+	/*Increment the number of current processes*/
+	processCount++;
+	/*Insert the new process onto the ready queue*/
+	insertProcQ(&(readyQueue), start);
+	
+	/*Call to the scheduler*/
 	scheduler();
-	//once scheduler is called, main()'s task is completed and control will never return to main()
-
+	
+	return 1;
 }
-
