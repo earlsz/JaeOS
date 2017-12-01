@@ -45,7 +45,7 @@ void interruptHandler(){
 		cpu_t stopTOD;
 		
 		/*Store ending TOD*/
-		STCK(stopTOD);
+		SETTIME(stopTOD);
 		
 		/*Store elapsed time*/
 		elapsedTime = stopTOD - startTOD;
@@ -87,7 +87,7 @@ void interruptHandler(){
 			intTimerFlag = FALSE;
 					
 			/*Leave the interrupt*/
-			returnFromInterrupt();
+			backToWhatWeWereDoing();
 			
 		}
 		/*It was a process's quantum ending*/
@@ -192,7 +192,7 @@ void interruptHandler(){
 		dev->d_command = ACK;
 		
 		/*Leave the interrupt*/
-		returnFromInterrupt();
+		backToWhatWeWereDoing();
 	}
 	
 }
@@ -286,16 +286,16 @@ void handleTerminal(int devNumber){
 	}
 	
 	/*Leave the interrupt*/
-	returnFromInterrupt();
+	backToWhatWeWereDoing();
 }
 
 
-void returnFromInterrupt(){
+void backToWhatWeWereDoing(){
 	
 	/*If processor wasn't waiting...*/
 	if(currentProcess != NULL){
 		/*Store start TOD*/
-		STCK(startTOD);
+		SETTIME(startTOD);
 		
 		/*Continue where it left off*/
 		LDST(&(currentProcess->p_s));

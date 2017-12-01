@@ -213,7 +213,7 @@
 #define ACK			1
 
 /* useful macros */
-#define STCK(T) ((T) = ((* ((cpu_t *) TODLOADDR)) / (* ((cpu_t *) TIMESCALEADDR))))
+#define SETTIME(T) ((T) = ((* ((cpu_t *) TODLOADDR)) / (* ((cpu_t *) TIMESCALEADDR))))
 
 
 #endif

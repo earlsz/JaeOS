@@ -76,129 +76,36 @@ void sysCallHandler(){
 
 			//sys1
 			case CREATEPROCESS:		
-				newPcb = allocPcb();
-				
-				/*If the free list was not empty...*/
-				if(newPcb != NULL){
-					
-					/*Copy SUCCESS code into return register*/
-					oldState->s_a1 = SUCCESS;
-
-					processCount++;
-					
-					/*Copy the state from a1 to the new pcb*/
-					moveState((state_t *) oldState->s_a2, 
-														&(newPcb->p_s));
-					
-					/*Make it a child of current process and add it to
-					 *the ready queue
-					 */
-					insertChild(currentProcess, newPcb);
-					insertProcQ(&(readyQueue), newPcb);	
-				}
-				
-				/*The free list was empty*/
-				else{
-					
-					/*Copy FAILURE code into return register*/
-					oldState->s_a1 = FAILURE;
-				}
-				
-				/*Return to current process*/				
-				headBackHome();
+				sysOne(oldState);
 				break;
 				
 			//sys2
 			case TERMINATEPROCESS:
 			
-				/*Recursively kill process and children*/
-				nukeItTilItPukes(currentProcess);
-				currentProcess = NULL;
-				
-				/*Get a new job*/
-				scheduler();
+				sysTwo(currentProcess);
 				break;
 				
 			//sys3				
 			case VERHOGEN:
 						
-				semAdd = (int *) oldState->s_a2;
-				
-				/*Increment semaphore address*/
-				*semAdd = *semAdd + 1;
-				
-				if(*semAdd <= 0){
-					
-					/*Unblock the next process*/
-					process = removeBlocked(semAdd);
-					process->p_semAdd = NULL;
-					
-					/*Add it to the ready queue*/
-					insertProcQ(&(readyQueue), process);
-				}
-
-				/*Return to current process*/
-				headBackHome();
+				sysThree(oldState, process);
 				break;
 
 			//sys4
 			case PASSEREN:
 							
-				semAdd = (int *) oldState->s_a2;
-				
-				/*Decrement semaphore address*/
-				*semAdd = *semAdd - 1;
-												
-				if(*semAdd < 0){
-										
-					/*Store ending TOD*/
-					STCK(stopTOD);
-					
-					/*Store elapsed time*/
-					elapsedTime = stopTOD - startTOD;
-					currentProcess->p_time = currentProcess->p_time 
-														+ elapsedTime;
-					timeLeft = timeLeft - elapsedTime;
-					
-					/*Block the currentProcess*/
-					insertBlocked(semAdd, currentProcess);
-					currentProcess = NULL;
-										
-					/*Get a new job*/
-					scheduler();
-				}
-				
-				/*Return to current process*/
-				headBackHome();
+				sysFour(currentProcess, oldState, elapsedTime, timeLeft, stopTOD);
 				break;
 			
 			//sys5
 			case SESV:
 				
-				/*Pass to Syscall 5 helper function*/
-				sysFiveHandle(oldState->s_a2); 
+				sysFive(oldState->s_a2); 
 				break;
 			
 			//sys6
 			case GETCPUTIME:
-			
-				/*Store ending TOD*/
-				STCK(stopTOD);
-				
-				/*Store elapsed time*/
-				elapsedTime = stopTOD - startTOD;
-				currentProcess->p_time = currentProcess->p_time 
-													+ elapsedTime;
-				timeLeft = timeLeft - elapsedTime;
-				
-				/*Copy current process time into return register*/		
-				currentProcess->p_s.s_a1 = currentProcess->p_time;
-				
-				/*Store starting TOD*/
-				STCK(startTOD);
-				
-				/*Return to previous process*/
-				headBackHome();
+				sysSix(stopTOD, elapsedTime, timeLeft, currentProcess);
 				break;
 				
 			//sys7			
@@ -211,12 +118,11 @@ void sysCallHandler(){
 				if(semaphoreArray[semDev] < 0){
 										
 					/*Store ending TOD*/
-					STCK(stopTOD);
+					SETTIME(stopTOD);
 					
 					/*Store elapsed time*/
 					elapsedTime = stopTOD - startTOD;
-					currentProcess->p_time = currentProcess->p_time 
-														+ elapsedTime;
+					currentProcess->p_time = currentProcess->p_time + elapsedTime;
 					timeLeft = timeLeft - elapsedTime;
 					
 					/*Block the process*/
@@ -249,7 +155,7 @@ void sysCallHandler(){
 				if(semaphoreArray[semDev] < 0){
 										
 					/*Store ending TOD*/
-					STCK(stopTOD);
+					SETTIME(stopTOD);
 					
 					elapsedTime = stopTOD - startTOD;
 					currentProcess->p_time = currentProcess->p_time + elapsedTime;
@@ -265,7 +171,7 @@ void sysCallHandler(){
 				}
 				else {
 					currentProcess->p_s.s_a1 = devStatus[semDev];
-					headBackHome();
+					LDST(&(currentProcess->p_s));
 				}
 				break;
 				
@@ -306,63 +212,96 @@ void sysCallHandler(){
 	
 }
 
+void sysOne(state_t *oldState){
+	pcb_t *newPcb = allocPcb();
+				
+	/*If the free list was not empty...*/
+	if(newPcb != NULL){
+					
+		/*Copy SUCCESS code into return register*/
+		oldState->s_a1 = SUCCESS;
 
-void passUpOrDie(int type){
-	
-	/*Based on the type of trap...*/
-	switch(type){
-		
-		case PROGTRAP:
-				
-			/*If the handler has already been set up...*/
-			if(currentProcess->oldPrgm != NULL){
-				
-				/*Move the areas around*/
-				moveState((state_t *) PROGTRPOLDADDR, (currentProcess->oldPrgm));
-			
-				
-				/*Return to the current process*/
-				headBackHome();
-			}
-			break;
-		
-		case TLBTRAP:
-			
-			/*If the handler has already been set up...*/
-			if(currentProcess->oldTlb != NULL){
-				
-				/*Move the areas around*/
-				moveState((state_t *) TLBOLDADDR, (currentProcess->oldTlb));
-				moveState(currentProcess->newTlb, &(currentProcess->p_s));	
-				
-				/*Return to current process*/
-				headBackHome();
-			}
-			break;
-			
-		case SYSTRAP:
-		
-			/*If the handler has already been set up...*/
-			if(currentProcess->oldSys != NULL){
-				
-				/*Move the areas around*/
-				moveState((state_t *) SYSCALLOLDADDR, (currentProcess->oldSys));
-				moveState(currentProcess->newSys, &(currentProcess->p_s));
-				
-				/*Return to current process*/
-				headBackHome();
-			}
-			break;
-	
+		processCount++;
+					
+		/*Copy the state from a1 to the new pcb*/
+		moveState((state_t *) oldState->s_a2, &(newPcb->p_s));
+					
+		/*Make it a child of current process and add it to
+		*the ready queue
+		*/
+		insertChild(currentProcess, newPcb);
+		insertProcQ(&(readyQueue), newPcb);	
 	}
-	
-	/*Kill the job and get a new one*/
-	nukeItTilItPukes(currentProcess);
-	scheduler();
+				
+	/*The free list was empty*/
+	else{
+					
+		/*Copy FAILURE code into return register*/
+		oldState->s_a1 = FAILURE;
+	}
+				
+	/*Return to current process*/				
+	LDST(&(currentProcess->p_s));
 }
-	
-//sys5 handler
-void sysFiveHandle(int type){
+
+void sysTwo(pcb_t *currentProcess){
+		/*Recursively kill process and children*/
+		recursiveKill(currentProcess);
+		currentProcess = NULL;
+				
+		/*Get a new job*/
+		scheduler();
+}
+
+void sysThree(state_t *oldState, pcb_t *process){
+	int *semAddress = (int *) oldState->s_a2;
+				
+	/*Increment semaphore address*/
+	*semAddress = *semAddress + 1;
+				
+	if(*semAddress <= 0){
+					
+		/*Unblock the next process*/
+		process = removeBlocked(semAddress);
+		process->p_semAdd = NULL;
+					
+		/*Add it to the ready queue*/
+		insertProcQ(&(readyQueue), process);
+	}
+
+	/*Return to current process*/
+	LDST(&(currentProcess->p_s));
+}
+
+void sysFour(pcb_t *currentProcess,state_t *oldState, cpu_t elapsedTime, cpu_t timeLeft, cpu_t stopTOD){
+	int *semAdd = (int *) oldState->s_a2;
+				
+	/*Decrement semaphore address*/
+	*semAdd = *semAdd - 1;
+												
+	if(*semAdd < 0){
+										
+		/*Store ending TOD*/
+		SETTIME(stopTOD);
+					
+		/*Store elapsed time*/
+		elapsedTime = stopTOD - startTOD;
+		currentProcess->p_time = currentProcess->p_time + elapsedTime;
+		timeLeft = timeLeft - elapsedTime;
+					
+		/*Block the currentProcess*/
+		insertBlocked(semAdd, currentProcess);
+		currentProcess = NULL;
+										
+		/*Get a new job*/
+		scheduler();
+	}
+				
+	/*Return to current process*/
+	LDST(&(currentProcess->p_s));
+}
+
+void sysFive(int type){
 	/*Get the old status*/
 	state_t* oldState = (state_t*) SYSCALLOLDADDR;
 	
@@ -379,7 +318,7 @@ void sysFiveHandle(int type){
 				currentProcess->newTlb = (state_t *)oldState->s_a4;
 				
 				/*Return to current process*/
-				headBackHome();
+				LDST(&(currentProcess->p_s));
 			}
 			
 		case PROGTRAP:
@@ -392,7 +331,7 @@ void sysFiveHandle(int type){
 				currentProcess->newPrgm = (state_t *)oldState->s_a4;
 				
 				/*Return to current process*/
-				headBackHome();
+				LDST(&(currentProcess->p_s));
 			}
 			
 		case SYSTRAP:
@@ -405,36 +344,99 @@ void sysFiveHandle(int type){
 				currentProcess->newSys = (state_t *)oldState->s_a4;
 				
 				/*Return to current process*/
-				headBackHome();
+				LDST(&(currentProcess->p_s));
 			}
 	}
 	
 	/*Kill the job and get a new one*/
-	nukeItTilItPukes(currentProcess);
+	recursiveKill(currentProcess);
 	scheduler();
 }
 
-
-void headBackHome(){
-	
-	/*Load the current process*/
+void sysSix(cpu_t stopTOD, cpu_t elapsedTime, cpu_t timeLeft, pcb_t *currentProcess){
+	/*Store ending TOD*/
+	SETTIME(stopTOD);
+				
+	/*Store elapsed time*/
+	elapsedTime = stopTOD - startTOD;
+	currentProcess->p_time = currentProcess->p_time + elapsedTime;
+	timeLeft = timeLeft - elapsedTime;
+				
+	/*Copy current process time into return register*/		
+	currentProcess->p_s.s_a1 = currentProcess->p_time;
+				
+	/*Store starting TOD*/
+	SETTIME(startTOD);
+				
+	/*Return to previous process*/
 	LDST(&(currentProcess->p_s));
-
 }
 
-/***********************************************************************
- *Function that recursively kills a process and all of its children. It
- *performs head recursion and checks to see if the process killed was
- *the current process, on the ready queue or blocked by a semaphore and
- *makes changes to processCount and softBlockCount accordingly.
- *RETURNS: N/a
- **********************************************************************/
-void nukeItTilItPukes(pcb_PTR parent){	
+
+void passUpOrDie(int type){
+	
+	/*Based on the type of trap...*/
+	switch(type){
+		
+		case PROGTRAP:
+				
+			/*If the handler has already been set up...*/
+			if(currentProcess->oldPrgm != NULL){
+				
+				/*Move the areas around*/
+				moveState((state_t *) PROGTRPOLDADDR, (currentProcess->oldPrgm));
+				moveState(currentProcess->newPrgm, &(currentProcess->p_s));
+
+				
+				/*Return to the current process*/
+				LDST(&(currentProcess->p_s));
+			}
+			break;
+		
+		case TLBTRAP:
+			
+			/*If the handler has already been set up...*/
+			if(currentProcess->oldTlb != NULL){
+				
+				/*Move the areas around*/
+				moveState((state_t *) TLBOLDADDR, (currentProcess->oldTlb));
+				moveState(currentProcess->newTlb, &(currentProcess->p_s));	
+				
+				/*Return to current process*/
+				LDST(&(currentProcess->p_s));
+			}
+			break;
+			
+		case SYSTRAP:
+		
+			/*If the handler has already been set up...*/
+			if(currentProcess->oldSys != NULL){
+				
+				/*Move the areas around*/
+				moveState((state_t *) SYSCALLOLDADDR, (currentProcess->oldSys));
+				moveState(currentProcess->newSys, &(currentProcess->p_s));
+				
+				/*Return to current process*/
+				LDST(&(currentProcess->p_s));
+			}
+			break;
+	
+	}
+	
+	/*Kill the job and get a new one*/
+	recursiveKill(currentProcess);
+	scheduler();
+}
+	
+
+
+//what became of the little ones, anakin?
+void recursiveKill(pcb_PTR parent){	
 	
 	/*While it has children...*/
 	while(!emptyChild(parent)){
 		/*Recursive death on child*/
-		nukeItTilItPukes(removeChild(parent));
+		recursiveKill(removeChild(parent));
 	}
 	
 	/*If the current process is the root...*/

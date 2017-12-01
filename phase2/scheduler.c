@@ -58,7 +58,7 @@ void processJob(pcb_PTR newJob){
 	currentProcess = newJob;
 	
 	/*Store starting TOD*/
-	STCK(startTOD);
+	SETTIME(startTOD);
 	
 	if(timeLeft < 0) timeLeft = 0;
 	
