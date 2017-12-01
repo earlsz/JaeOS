@@ -131,6 +131,12 @@ void	p2(),p3(),p4(),p5(),p5a(),p5b(),p6(),p7(),p7a(),p5prog(),p5mm();
 void	p5sys(),p8root(),child1(),child2(),p8leaf();
 
 
+void debugTest(int a, int b, int c, int d){
+	int i = 73;
+	i++;
+}
+
+
 /* a procedure to print on terminal 0 */
 void print(char *msg) {
 
@@ -406,6 +412,7 @@ void p3() {
 void p4() {
 	switch (p4inc) {
 		case 1:
+
 			print("first incarnation of p4 starts\n");
 			p4inc++;
 			break;
@@ -433,9 +440,16 @@ void p4() {
 
 	print("p4 is OK\n");
 
-	SYSCALL(VERHOGEN, (int)&endp4, 0, 0);				/* V(endp4)          */
+	SYSCALL(VERHOGEN, (int)&endp4, 0, 0);		/* V(endp4)          */
+	
+	debugTest(4, 1, 1, 1);		
 
-	SYSCALL(TERMINATETHREAD, 0, 0, 0);			/* terminate p4      */
+	//print("attempting to terminate p4...\n");				
+	SYSCALL(TERMINATETHREAD, 0, 0, 0); /* terminate p4 */
+
+	print("p4 terminated\n");
+
+	debugTest(4, 2, 1, 1);
 
 	/* just did a SYS2, so should not get to this point */
 	print("error: p4 didn't terminate\n");
@@ -469,6 +483,7 @@ void p5prog() {
 
 /* p5's memory management trap handler */
 void p5mm() {
+	//debugTest(5, 0, 0, 0);
 	print("memory management trap\n");
 	/* VM off, user mode on */
 	mstat_o.cpsr = ALLOFF | STATUS_USER_MODE;  

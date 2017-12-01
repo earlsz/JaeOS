@@ -54,6 +54,7 @@ int main(){
 	 * 		Interrupts disabled
 	 * 		Supervisor mode on
 	 */
+	/*
 	statePtr = (state_t *) SYSCALLNEWADDR;
 	STST(statePtr);
 	statePtr->s_pc = (unsigned int)sysCallHandler;		
@@ -81,7 +82,36 @@ int main(){
 	statePtr->s_sp = bus->ramtop;
 	statePtr->s_cpsr = ALLOFF | IRQDISABLED | 
 								FIQDISABLED | SYSTEMMODE;
+
+	*/
 	
+
+	statePtr = (state_t *) SYSCALLNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)sysCallHandler;		
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
+	
+	statePtr = (state_t *) PROGTRPNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)pgmTrapHandler;
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
+								
+	statePtr = (state_t *) TLBNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)tlbHandler;
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
+	
+	statePtr = (state_t *) INTERRUPTNEWADDR;
+	STST(statePtr);
+	statePtr->s_pc = (unsigned int)interruptHandler;
+	statePtr->s_sp = bus->ramtop;
+	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
+
+
+
 	/*Initialize PCBs and ASL*/
 	initPcbs();
 	initASL();
