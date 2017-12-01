@@ -54,7 +54,7 @@ int main(){
 	 * 		Interrupts disabled
 	 * 		Supervisor mode on
 	 */
-	/*
+/*
 	statePtr = (state_t *) SYSCALLNEWADDR;
 	STST(statePtr);
 	statePtr->s_pc = (unsigned int)sysCallHandler;		
