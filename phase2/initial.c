@@ -38,7 +38,7 @@ int main(){
 	devregarea_t *bus = (devregarea_t *) DEVREGAREAADDR;
 
 	/*Set status to all interrupts disabled and system mode on*/
-	setSTATUS(ALLOFF | IRQDISABLED | FIQDISABLED | SYSTEMMODE);
+	setSTATUS(ALLOFF | INTSDISABLED | SYSTEMMODE);
 	
 	
 	/*Initialize array of semaphores to 0*/
