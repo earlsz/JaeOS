@@ -122,8 +122,7 @@ void sysCallHandler(){
 					
 					/*Store elapsed time*/
 					elapsedTime = stopTOD - startTOD;
-					currentProcess->p_time = currentProcess->p_time 
-														+ elapsedTime;
+					currentProcess->p_time = currentProcess->p_time + elapsedTime;
 					timeLeft = timeLeft - elapsedTime;
 					
 					/*Block the process*/
