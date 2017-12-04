@@ -1,6 +1,8 @@
+
+/************************EXCEPTIONS.C************************************/
 /*
-* This file will contain syscalls for handling a number
-* of different exception scenarios.
+* This file will contain functions that handle program trap exceptions,
+* TLB trap exceptions, and system calls.
 */
 
 #include "../h/const.h"
@@ -14,7 +16,8 @@
 
 #include "/usr/include/uarm/libuarm.h"
 
-
+ /* Function that handles a Program trap exception. All TLB trap exceptions 
+  * are handled as pass up or die as a Program trap */
 void pgmTrapHandler(){
 	
 	state_t* oldState = (state_t*) PROGTRPOLDADDR;
@@ -24,10 +27,9 @@ void pgmTrapHandler(){
 	
 }
 
-/***********************************************************************
- *Function that handles a TLB trap exception. All TLB trap exceptions 
- *are handled as pass up or die as a TLB trap.
- **********************************************************************/
+
+ /* Function that handles a TLB trap exception. All TLB trap exceptions 
+  * are handled as pass up or die as a TLB trap. */
 void tlbHandler(){
 	
 	state_t* oldState = (state_t*) TLBOLDADDR;
@@ -37,11 +39,15 @@ void tlbHandler(){
 	
 }
 
-void debug(int a, int b, int c, int d){ int i = 5;}
 
 /****************************SYSCALLHANDLER*****************************/
+/* Function that handles system calls. If a call 1-8 is made in user
+ * mode, then it is handles it as a program trap exception. If the 
+ * program is in system mode and makes a call 1 through 8, then the 
+ * proper function is called based on the call number. All calls over
+ * 8 in either mode is handled as a system call exception. 
+ */
 void sysCallHandler(){
- 	debug(1,2,3,4);
 	/*Local Variable Declarations*/
 	pcb_PTR newPcb;
 	pcb_PTR process = NULL;
@@ -68,7 +74,7 @@ void sysCallHandler(){
 		system = TRUE;
 	}
 	
-	/*If in system mode...*/
+	/*If process is in system mode...*/
 	if(system){
 		
 		/*Based on the type of Syscall...*/
@@ -185,9 +191,7 @@ void sysCallHandler(){
 		}
 	}
 	
-	/*The process was not in system mode*/
-	
-	/*If it was a Syscall 1-8...*/
+	/*If the process is in user mode and it was a Syscall 1-8...*/
 	if(sysCallNum >= CREATEPROCESS && sysCallNum <= WAITFORIO){
 		
 		/*Get the new areas in memory*/
@@ -204,18 +208,24 @@ void sysCallHandler(){
 		pgmTrapHandler();
 	}
 	
-	/*Syscall 9-255*/
-	
+	/*Syscall greater than 8 in either mode*/
 	/*Call a Syscall Pass Up or Die*/
 	passUpOrDie(SYSTRAP);
 	
-	
-}
+	}
 
+/************SYSCALL FUNCTIONS*******************************************/
+/* This function creates a child process of the current process. 
+ * Returns SUCCESS in a1 if the process could be created, otherwise
+ * it returns FAILURE in a1.
+ */
 void sysOne(state_t *oldState){
+
+	/*create a new process*/
 	pcb_t *newPcb = allocPcb();
 				
-	/*If the free list was not empty...*/
+	/*If the free list was not empty... has to be the case
+	 *in order to create a new process */
 	if(newPcb != NULL){
 					
 		/*Copy SUCCESS code into return register*/
@@ -226,9 +236,8 @@ void sysOne(state_t *oldState){
 		/*Copy the state from a1 to the new pcb*/
 		copyState((state_t *) oldState->a2, &(newPcb->p_s));
 					
-		/*Make it a child of current process and add it to
-		*the ready queue
-		*/
+		/*Make process a child of current process and 
+		 *add it to the ready queue */
 		insertChild(currentProcess, newPcb);
 		insertProcQ(&(readyQueue), newPcb);	
 	}
@@ -244,6 +253,10 @@ void sysOne(state_t *oldState){
 	LDST(&(currentProcess->p_s));
 }
 
+/* This function terminates the current process and 
+ * all of its children processes. After killing all 
+ * processes it calls the scheduler to get a new job.
+ */
 void sysTwo(pcb_t *currentProcess){
 		/*Recursively kill process and children*/
 		recursiveKill(currentProcess);
@@ -253,6 +266,13 @@ void sysTwo(pcb_t *currentProcess){
 		scheduler();
 }
 
+/* VERHOGEN. This performs a V operation (signal)
+ * on a specified semaphore. After signaling a 
+ * semaphore, it returns to the current process.
+ * 
+ * The address of the semaphore to V should 
+ * already be stored in a2.
+ */
 void sysThree(state_t *oldState, pcb_t *process){
 	int *semAddress = (int *) oldState->a2;
 				
@@ -273,6 +293,15 @@ void sysThree(state_t *oldState, pcb_t *process){
 	LDST(&(currentProcess->p_s));
 }
 
+/* PASSEREN. This performs a P operation (wait)
+ * on a specified semaphore. If the current
+ * process is blocked, we call the scheduler
+ * to load the next job. Otherwise, we return
+ * to the current process
+ *
+ * The address of the semaphore to P should 
+ * already be stored in a2.
+ */
 void sysFour(pcb_t *currentProcess,state_t *oldState, cpu_t elapsedTime, cpu_t timeLeft, cpu_t stopTOD){
 	int *semAdd = (int *) oldState->a2;
 				
@@ -301,6 +330,13 @@ void sysFour(pcb_t *currentProcess,state_t *oldState, cpu_t elapsedTime, cpu_t t
 	LDST(&(currentProcess->p_s));
 }
 
+/* This function sets the handlers for the current
+ * process that are used in passUpOrDie. If the 
+ * process already has a handler, the process and
+ * all its children are killed. Otherwise, the
+ * process is reloaded with the set handler in 
+ * place.
+ */
 void sysFive(int type){
 	/*Get the old status*/
 	state_t* oldState = (state_t*) SYSCALLOLDADDR;
@@ -308,9 +344,9 @@ void sysFive(int type){
 	/*Based on the type of trap...*/
 	switch(type){
 		
-		case TLBTRAP:
+		case TLBTRAP: //TLBTRAP = 0
 		
-			/*If the area hasn't already been populated...*/
+			/*If the area hasn't already been set with a handler..*/
 			if(currentProcess->oldTlb == NULL){
 				
 				/*Set old and new areas*/
@@ -321,9 +357,9 @@ void sysFive(int type){
 				LDST(&(currentProcess->p_s));
 			}
 			
-		case PROGTRAP:
+		case PROGTRAP: //PROGTAP = 1
 			
-			/*If the area hasn't been already populated...*/
+			/*If the area hasn't already been set with a handler..*/
 			if(currentProcess->oldPrgm == NULL){
 				
 				/*Set old and new areas*/
@@ -334,9 +370,9 @@ void sysFive(int type){
 				LDST(&(currentProcess->p_s));
 			}
 			
-		case SYSTRAP:
+		case SYSTRAP: //SYSTRAP = 2
 			
-			/*If the area hasn't been already populated...*/
+			/*If the area hasn't already been set with a handler..*/
 			if(currentProcess->oldSys == NULL){
 				
 				/*Set old and new areas*/
@@ -353,6 +389,10 @@ void sysFive(int type){
 	scheduler();
 }
 
+/* This function returns the current process's
+ * elapsed time on the cpu. The process's time
+ * is stored in a1 and we return to our process.
+ */
 void sysSix(cpu_t stopTOD, cpu_t elapsedTime, cpu_t timeLeft, pcb_t *currentProcess){
 	/*Store ending TOD*/
 	SETTIME(stopTOD);
@@ -368,11 +408,15 @@ void sysSix(cpu_t stopTOD, cpu_t elapsedTime, cpu_t timeLeft, pcb_t *currentProc
 	/*Store starting TOD*/
 	SETTIME(startTOD);
 				
-	/*Return to previous process*/
+	/*Return to current process*/
 	LDST(&(currentProcess->p_s));
 }
 
-
+/* This function runs a program's exception handler if one has
+ * been defined after a sys5 call was made. If no handler has
+ * has been defined, then the process and all of its children
+ * are killed and the scheduler is called.
+ */
 void passUpOrDie(int type){
 	
 	/*Based on the type of trap...*/
@@ -429,8 +473,10 @@ void passUpOrDie(int type){
 }
 	
 
-
-//what became of the little ones, anakin?
+/* This function kills a process and all of its children processes.
+ * While doing this, softBlockCount, processCount, and semaphores
+ * are updated accordingly.
+ */
 void recursiveKill(pcb_PTR parent){	
 	
 	/*While it has children...*/
