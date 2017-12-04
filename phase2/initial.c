@@ -1,5 +1,9 @@
+
+/****************************INITIAL.C***********************************/
 /* This file contains only one function i.e main() which serves as the 
- * entry point for JaeOS and performs nucleus initialization.
+ * entry point for JaeOS and performs nucleus initialization. We also
+ * initialize some phase 2 global variables. We allocate a starting 
+ * process and it starts running. 
  */
 
 #include "../h/const.h"
@@ -15,6 +19,7 @@
 #include "/usr/include/uarm/libuarm.h"
 
 
+/*Phase 2 Global Variables*/
 int processCount;
 int softBlockCount;
 pcb_PTR currentProcess;
@@ -35,7 +40,7 @@ int main(){
 	pcb_PTR start = NULL;
 	state_t *statePtr;
 	
-	devregarea_t *bus = (devregarea_t *) DEVREGAREAADDR;
+	devregarea_t *bus = (devregarea_t *) RAMTOP;
 
 	/*Set status to all interrupts disabled and system mode on*/
 	setSTATUS(ALLOFF | INTSDISABLED | SYSTEMMODE);
@@ -48,38 +53,41 @@ int main(){
 	}
 	
 	/*Populate the four new areas in low memory
-	 *	Set the stack pointer to last page of physical
+	 *	Set the stack pointer to ramtop
 	 *	Set the pc to address of handler
 	 *	Set the cpsr to
 	 * 		Interrupts disabled
 	 * 		Supervisor mode on
 	 */
-	
-
+	/*Area 1: Syscall */
 	statePtr = (state_t *) SYSCALLNEWADDR;
 	STST(statePtr);
-	statePtr->s_pc = (unsigned int)sysCallHandler;		
-	statePtr->s_sp = bus->ramtop;
-	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
+	statePtr->pc = (unsigned int)sysCallHandler;		
+	statePtr->sp = bus->ramtop;
+	statePtr->cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
 	
+	/*Area 2: Program Trap*/
 	statePtr = (state_t *) PROGTRPNEWADDR;
 	STST(statePtr);
-	statePtr->s_pc = (unsigned int)pgmTrapHandler;
-	statePtr->s_sp = bus->ramtop;
-	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
-								
+	statePtr->pc = (unsigned int)pgmTrapHandler;
+	statePtr->sp = bus->ramtop;
+	statePtr->cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
+						
+	/*Area 3: TLB exception*/		
 	statePtr = (state_t *) TLBNEWADDR;
 	STST(statePtr);
-	statePtr->s_pc = (unsigned int)tlbHandler;
-	statePtr->s_sp = bus->ramtop;
-	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
+	statePtr->pc = (unsigned int)tlbHandler;
+	statePtr->sp = bus->ramtop;
+	//statePtr->sp = RAMTOP;
+	statePtr->cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
 	
+	//Area 4: Interrupt
 	statePtr = (state_t *) INTERRUPTNEWADDR;
 	STST(statePtr);
-	statePtr->s_pc = (unsigned int)interruptHandler;
-	statePtr->s_sp = bus->ramtop;
-	statePtr->s_cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
-
+	statePtr->pc = (unsigned int)interruptHandler;
+	statePtr->sp = bus->ramtop;
+	//statePtr->sp = RAMTOP;
+	statePtr->cpsr = ALLOFF | INTSDISABLED | SYSTEMMODE;
 
 
 	/*Initialize PCBs and ASL*/
@@ -95,11 +103,10 @@ int main(){
 	
 	/*Allocate a starting process*/
 	start = allocPcb();
-	
 	STST(&(start->p_s));
-	start->p_s.s_pc = (memaddr) test;
-	start->p_s.s_sp = bus->ramtop - (2 * PAGESIZE);
-	start->p_s.s_cpsr = ALLOFF | SYSTEMMODE;
+	start->p_s.pc = (memaddr) test;
+	start->p_s.sp = bus->ramtop - PAGESIZE;
+	start->p_s.cpsr = ALLOFF | SYSTEMMODE;
 	
 	/*Start the interval timer and set pseudo clock timer*/
 	timeLeft = INTERVALTIME;

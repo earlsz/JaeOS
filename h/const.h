@@ -33,6 +33,7 @@
 /* bus register addresses */
 #define INTBITMAPADDR		0x6FE0
 #define DEVREGAREAADDR		0x2D0
+#define RAMTOP				0x2D0
 #define TODLOADDR			0x2E0
 #define INTERVALTMR			0x2E4
 #define TIMESCALEADDR		0x2E8

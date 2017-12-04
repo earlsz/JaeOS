@@ -35,10 +35,10 @@ void interruptHandler(){
 	unsigned int currentStatus;
 	state_t* oldInt = (state_t *) INTERRUPTOLDADDR;
 	devregarea_t* devReg = (devregarea_t *) DEVREGAREAADDR;
-	int pendingDevice = oldInt->s_CP15_Cause >> 24;
+	int pendingDevice = oldInt->CP15_Cause >> 24;
 	
 	/*Decrement pc to the instruction that was executing*/
-	oldInt->s_pc = oldInt->s_pc - 4;
+	oldInt->pc = oldInt->pc - 4;
 	
 	/*If there was a process running...*/
 	if(currentProcess != NULL){
@@ -53,7 +53,7 @@ void interruptHandler(){
 		timeLeft = timeLeft - elapsedTime;
 		
 		/*Move the old state into the current process*/
-		moveState(oldInt, &(currentProcess->p_s));
+		copyState(oldInt, &(currentProcess->p_s));
 	}
 		
 	/*If the interrupt was an interval timer interrupt...*/
@@ -176,7 +176,7 @@ void interruptHandler(){
 				process->p_semAdd = NULL;
 				
 				/*Set status of interrupt for the waiting process*/
-				process->p_s.s_a1 = dev->d_status;		
+				process->p_s.a1 = dev->d_status;		
 				softBlockCount--;
 				
 				/*Add it to the ready queue*/
@@ -265,7 +265,7 @@ void handleTerminal(int devNumber){
 			if(receive){
 
 				/*Acknowledge the read*/
-				process->p_s.s_a1 = dev->t_recv_status;
+				process->p_s.a1 = dev->t_recv_status;
 				dev->t_recv_command = ACK;
 			}
 			
@@ -273,14 +273,14 @@ void handleTerminal(int devNumber){
 			else{
 
 				/*Acknowledge the transmit*/
-				process->p_s.s_a1 = dev->t_transm_status;
+				process->p_s.a1 = dev->t_transm_status;
 				dev->t_transm_command = ACK;
 			}
 			
 			softBlockCount--;
 			
 			/*Add it to the ready queue*/
-			debugX(dev->t_transm_status, process->p_s.s_a1, 3, 3);
+			debugX(dev->t_transm_status, process->p_s.a1, 3, 3);
 			insertProcQ(&(readyQueue), process);
 		}
 	}

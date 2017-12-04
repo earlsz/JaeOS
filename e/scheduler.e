@@ -16,7 +16,7 @@ extern cpu_t startTOD;
 
 extern void scheduler();
 extern void processJob(pcb_PTR newJob);
-extern void moveState(state_t *source, state_t *target);
+extern void copyState(state_t *source, state_t *target);
 
 /***************************************************************/
 

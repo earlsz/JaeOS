@@ -1,5 +1,10 @@
-/* This file maintains a round-robin process scheduler and performs 
- * deadlock detection.
+
+/*********************SCHEDULER.C********************************************/
+/* This file maintains a round-robin process scheduler that determines
+ * job on the ready queue that needs to be ran. The scheduler also  performs
+ * deadlock detection. In essemce, If no job is on the ready queue, we 
+ * check the process count and soft block count to determine what action 
+ * should be taken next. Else, we run the next job.
  */
 
 #include "../h/const.h"
@@ -14,31 +19,44 @@
 #include "../e/initial.e"
 
 #include "/usr/include/uarm/libuarm.h"
-extern void debugX(int a, int b, int c, int d);
-
 
 void scheduler(){
-	debugX(10, 11, 12, 13);
+
 	pcb_PTR newJob = NULL;
 
+	//Get next job on ready queue
 	newJob = removeProcQ(&(readyQueue));
 	
-	if(newJob == NULL){
+	/*if no jobs on ready queue*/
+	if(newJob == NULL)
+	{
+
+		/*we have no current process*/
+		currentProcess = NULL; 
 		
-		currentProcess = NULL;
-		
-		if(processCount == 0){
+		/*if all jobs are finished, we HALT */
+		if(processCount == 0)
+		{
 			HALT();
-		}	
-		else if(processCount > 0){
+		}
+		/*there are jobs left*/
+		else if(processCount > 0)
+		{
+
+			/* if softBlockCount = 0 but there are still
+			   jobs left, we have hit deadlock, so we PANIC */
 			if(softBlockCount == 0){											
 				PANIC();
 			}
 
 			/*If there are processes blocked by I/0...*/
-			if(softBlockCount > 0){
+			if(softBlockCount > 0)
+			{
+				/*set the timer*/
 				setTIMER(timeLeft);
+
 				intTimerFlag = TRUE;
+
 				/*Enable interrupts in the processor*/
 				setSTATUS(getSTATUS() & ALLINTENABLED);
 				WAIT();
@@ -46,12 +64,15 @@ void scheduler(){
 		}
 	}
 	
-	else{
+	/*we have a new job to process*/
+	else
+	{
 		/*Process job*/
 		processJob(newJob);
 	}
 }
 
+/*Load the new job or current process and do timer stuff*/
 void processJob(pcb_PTR newJob){
 		
 	/*Set the current process to the new job*/
@@ -79,11 +100,11 @@ void processJob(pcb_PTR newJob){
 	
 }
 
+/*perform a deep copy between two state_t structures for all registers*/
+void copyState(state_t* source, state_t* target){
 
-void moveState(state_t* source, state_t* target){
-	
 	int i;
-	
+
 	/*Copy the 22 registers*/
 	for(i = 0; i < STATEREGNUM; i++){
 		target->s_reg[i] = source->s_reg[i];

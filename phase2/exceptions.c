@@ -55,16 +55,16 @@ void sysCallHandler(){
 	
 	
 	state_t* oldState = (state_t*) SYSCALLOLDADDR;
-	int sysCallNum = oldState->s_a1;
+	int sysCallNum = oldState->a1;
 	
 	/*Increment PC by 8*/
-	oldState->s_pc = oldState->s_pc + 8;
+	oldState->pc = oldState->pc + 8;
 	
 	/*Move the old state into the current process*/
-	moveState(oldState, &(currentProcess->p_s));
+	copyState(oldState, &(currentProcess->p_s));
 	
 	/*If the state was in system mode...*/
-	if((currentProcess->p_s.s_cpsr & SYSTEMMODE) == SYSTEMMODE){
+	if((currentProcess->p_s.cpsr & SYSTEMMODE) == SYSTEMMODE){
 		system = TRUE;
 	}
 	
@@ -100,7 +100,7 @@ void sysCallHandler(){
 			//sys5
 			case SESV:
 				
-				sysFive(oldState->s_a2); 
+				sysFive(oldState->a2); 
 				break;
 			
 			//sys6
@@ -142,10 +142,10 @@ void sysCallHandler(){
 			case WAITFORIO:
 				
 				/*Get the proper semaphore device number*/
-				semDev = DEVPERINT*(oldState->s_a2 - DISKINT) + oldState->s_a3;
+				semDev = DEVPERINT*(oldState->a2 - DISKINT) + oldState->a3;
 							
 				/*If the terminal is a write terminal...*/					
-				if(!(oldState->s_a4) && (oldState->s_a2 == TERMINT)){
+				if(!(oldState->a4) && (oldState->a2 == TERMINT)){
 					semDev = semDev + DEVPERINT;
 				}
 				
@@ -170,7 +170,7 @@ void sysCallHandler(){
 					scheduler();
 				}
 				else {
-					currentProcess->p_s.s_a1 = devStatus[semDev];
+					currentProcess->p_s.a1 = devStatus[semDev];
 					LDST(&(currentProcess->p_s));
 				}
 				break;
@@ -195,10 +195,10 @@ void sysCallHandler(){
 		progTrpOld = (state_t *) PROGTRPOLDADDR;
 		
 		/*Move state from sysCallOld to progTrpOld*/
-		moveState(sysCallOld, progTrpOld);
+		copyState(sysCallOld, progTrpOld);
 			
 		/*Set cause register to priviledged instruction*/
-		progTrpOld->s_CP15_Cause = RESERVED;
+		progTrpOld->CP15_Cause = RESERVED;
 
 		/*Pass up to Program Trap Handler*/
 		pgmTrapHandler();
@@ -219,12 +219,12 @@ void sysOne(state_t *oldState){
 	if(newPcb != NULL){
 					
 		/*Copy SUCCESS code into return register*/
-		oldState->s_a1 = SUCCESS;
+		oldState->a1 = SUCCESS;
 
 		processCount++;
 					
 		/*Copy the state from a1 to the new pcb*/
-		moveState((state_t *) oldState->s_a2, &(newPcb->p_s));
+		copyState((state_t *) oldState->a2, &(newPcb->p_s));
 					
 		/*Make it a child of current process and add it to
 		*the ready queue
@@ -237,7 +237,7 @@ void sysOne(state_t *oldState){
 	else{
 					
 		/*Copy FAILURE code into return register*/
-		oldState->s_a1 = FAILURE;
+		oldState->a1 = FAILURE;
 	}
 				
 	/*Return to current process*/				
@@ -254,7 +254,7 @@ void sysTwo(pcb_t *currentProcess){
 }
 
 void sysThree(state_t *oldState, pcb_t *process){
-	int *semAddress = (int *) oldState->s_a2;
+	int *semAddress = (int *) oldState->a2;
 				
 	/*Increment semaphore address*/
 	*semAddress = *semAddress + 1;
@@ -274,7 +274,7 @@ void sysThree(state_t *oldState, pcb_t *process){
 }
 
 void sysFour(pcb_t *currentProcess,state_t *oldState, cpu_t elapsedTime, cpu_t timeLeft, cpu_t stopTOD){
-	int *semAdd = (int *) oldState->s_a2;
+	int *semAdd = (int *) oldState->a2;
 				
 	/*Decrement semaphore address*/
 	*semAdd = *semAdd - 1;
@@ -314,8 +314,8 @@ void sysFive(int type){
 			if(currentProcess->oldTlb == NULL){
 				
 				/*Set old and new areas*/
-				currentProcess->oldTlb = (state_t *)oldState->s_a3;
-				currentProcess->newTlb = (state_t *)oldState->s_a4;
+				currentProcess->oldTlb = (state_t *)oldState->a3;
+				currentProcess->newTlb = (state_t *)oldState->a4;
 				
 				/*Return to current process*/
 				LDST(&(currentProcess->p_s));
@@ -327,8 +327,8 @@ void sysFive(int type){
 			if(currentProcess->oldPrgm == NULL){
 				
 				/*Set old and new areas*/
-				currentProcess->oldPrgm = (state_t *)oldState->s_a3;
-				currentProcess->newPrgm = (state_t *)oldState->s_a4;
+				currentProcess->oldPrgm = (state_t *)oldState->a3;
+				currentProcess->newPrgm = (state_t *)oldState->a4;
 				
 				/*Return to current process*/
 				LDST(&(currentProcess->p_s));
@@ -340,8 +340,8 @@ void sysFive(int type){
 			if(currentProcess->oldSys == NULL){
 				
 				/*Set old and new areas*/
-				currentProcess->oldSys = (state_t *)oldState->s_a3;
-				currentProcess->newSys = (state_t *)oldState->s_a4;
+				currentProcess->oldSys = (state_t *)oldState->a3;
+				currentProcess->newSys = (state_t *)oldState->a4;
 				
 				/*Return to current process*/
 				LDST(&(currentProcess->p_s));
@@ -363,7 +363,7 @@ void sysSix(cpu_t stopTOD, cpu_t elapsedTime, cpu_t timeLeft, pcb_t *currentProc
 	timeLeft = timeLeft - elapsedTime;
 				
 	/*Copy current process time into return register*/		
-	currentProcess->p_s.s_a1 = currentProcess->p_time;
+	currentProcess->p_s.a1 = currentProcess->p_time;
 				
 	/*Store starting TOD*/
 	SETTIME(startTOD);
@@ -384,8 +384,8 @@ void passUpOrDie(int type){
 			if(currentProcess->oldPrgm != NULL){
 				
 				/*Move the areas around*/
-				moveState((state_t *) PROGTRPOLDADDR, (currentProcess->oldPrgm));
-				moveState(currentProcess->newPrgm, &(currentProcess->p_s));
+				copyState((state_t *) PROGTRPOLDADDR, (currentProcess->oldPrgm));
+				copyState(currentProcess->newPrgm, &(currentProcess->p_s));
 
 				
 				/*Return to the current process*/
@@ -399,8 +399,8 @@ void passUpOrDie(int type){
 			if(currentProcess->oldTlb != NULL){
 				
 				/*Move the areas around*/
-				moveState((state_t *) TLBOLDADDR, (currentProcess->oldTlb));
-				moveState(currentProcess->newTlb, &(currentProcess->p_s));	
+				copyState((state_t *) TLBOLDADDR, (currentProcess->oldTlb));
+				copyState(currentProcess->newTlb, &(currentProcess->p_s));	
 				
 				/*Return to current process*/
 				LDST(&(currentProcess->p_s));
@@ -413,8 +413,8 @@ void passUpOrDie(int type){
 			if(currentProcess->oldSys != NULL){
 				
 				/*Move the areas around*/
-				moveState((state_t *) SYSCALLOLDADDR, (currentProcess->oldSys));
-				moveState(currentProcess->newSys, &(currentProcess->p_s));
+				copyState((state_t *) SYSCALLOLDADDR, (currentProcess->oldSys));
+				copyState(currentProcess->newSys, &(currentProcess->p_s));
 				
 				/*Return to current process*/
 				LDST(&(currentProcess->p_s));
